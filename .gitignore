@@ -1,0 +1,12 @@
+/build/api/*
+/build/code-browser/*
+/build/coverage/*
+/build/graph/*
+/build/logs/*
+/build/pdepend/*
+/build/phpdox/*
+/build/todo/*
+/etc/config.json
+/.project
+/cache.properties
+
