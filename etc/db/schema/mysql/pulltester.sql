@@ -1,11 +1,23 @@
 -- Joomla Pull Request Tester Schema
 -- ---------------------------------
 
+CREATE TABLE `pt_milestones` (
+  `milestone_id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `github_id` int(10) unsigned NOT NULL DEFAULT '0',
+  `title` varchar(255) NOT NULL DEFAULT '',
+  `state` tinyint(4) NOT NULL DEFAULT '0',
+  `created_time` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+  `due_time` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+  `data` mediumtext NOT NULL,
+  PRIMARY KEY (`milestone_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
 -- Base pull request table for tracking the open pull requests.
 
 CREATE TABLE `pt_pull_requests` (
   `pull_id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `github_id` int(10) unsigned NOT NULL DEFAULT '0',
+  `milestone_id` int(10) unsigned DEFAULT NULL,
   `title` varchar(255) NOT NULL DEFAULT '',
   `state` tinyint(4) NOT NULL DEFAULT '0',
   `is_mergeable` tinyint(4) NOT NULL DEFAULT '0',
@@ -17,8 +29,11 @@ CREATE TABLE `pt_pull_requests` (
   `closed_time` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
   `merged_time` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
   `data` mediumtext NOT NULL,
-  PRIMARY KEY (`pull_id`)
+  PRIMARY KEY (`pull_id`),
+  KEY `pt_pull_requests_milestone` (`milestone_id`),
+  CONSTRAINT `pt_pull_requests_milestone` FOREIGN KEY (`milestone_id`) REFERENCES `pt_milestones` (`milestone_id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
 
 CREATE TABLE `pt_pull_request_tests` (
   `test_id` int(10) unsigned NOT NULL AUTO_INCREMENT,

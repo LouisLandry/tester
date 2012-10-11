@@ -49,6 +49,7 @@ class PTCommandUpdate extends JControllerBase
 		$model = new PTRepository($state);
 
 		// Sync the local database with the GitHub metadata.
+		$model->syncMilestones();
 		$model->syncRequests($this->input->getBool('f', false));
 
 		// Test the master repository.

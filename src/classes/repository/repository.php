@@ -29,6 +29,12 @@ class PTRepository extends JModelDatabase
 	protected $repo;
 
 	/**
+	 * @var    array  A lookup array for github_id to milestone_id values.
+	 * @since  1.0
+	 */
+	private $_milestoneLookup;
+
+	/**
 	 * @var    object  The repository database row object.
 	 * @since  1.0
 	 */
@@ -183,6 +189,46 @@ class PTRepository extends JModelDatabase
 
 		// Clean things up.
 		$this->repo->clean();
+	}
+
+	/**
+	 * Method to synchronize the local milestone metadata with the github repository.
+	 *
+	 * @return  void
+	 *
+	 * @since   1.0
+	 */
+	public function syncMilestones()
+	{
+		// Synchronize closed milestones first.
+		$page = 1;
+		$milestones = $this->github->milestones->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'closed', 'due_at', 'desc', $page, 100);
+
+		// Paginate over closed milestones until there aren't any more.
+		while (!empty($milestones))
+		{
+			// Process the milestones.
+			$this->_processMilestones($milestones);
+
+			// Get the next page of milestones.
+			$page++;
+			$milestones = $this->github->milestones->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'closed', 'due_at', 'desc', $page, 100);
+		}
+
+		// Synchronize open milestones next.
+		$page = 1;
+		$milestones = $this->github->milestones->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'open', 'due_at', 'desc', $page, 100);
+
+		// Paginate over open milestones until there aren't any more.
+		while (!empty($milestones))
+		{
+			// Process the milestones.
+			$this->_processMilestones($milestones);
+
+			// Get the next page of milestones.
+			$page++;
+			$milestones = $this->github->milestones->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'open', 'due_at', 'desc', $page, 100);
+		}
 	}
 
 	/**
@@ -708,6 +754,48 @@ class PTRepository extends JModelDatabase
 	}
 
 	/**
+	 * Update the milestone information.
+	 *
+	 * @param   array  $milestones  The list of milestones to update.
+	 *
+	 * @return  void
+	 *
+	 * @since   1.0
+	 */
+	private function _processMilestones($milestones)
+	{
+		// Iterate over the incoming pull requests and make sure they are all synchronized with our database.
+		foreach ($milestones as $milestone)
+		{
+			// Attempt to load the existing milestone based on GitHub ID.
+			$request = new PTRepositoryMilestone($this->db);
+			$request->load(array('github_id' => (int) $milestone->number));
+
+			// Bind the values to our request.
+			$request->github_id = (int) $milestone->number;
+			$request->title = $milestone->title;
+			$request->state = ($milestone->state == 'open' ? 0 : 1);
+			$request->created_time = JFactory::getDate($milestone->created_at, 'GMT')->toSql();
+			$request->due_time = ($milestone->due_on ? JFactory::getDate($milestone->due_on, 'GMT')->toSql() : $this->db->getNullDate());
+			$request->data = $milestone;
+
+			if (!$request->check())
+			{
+				JLog::add(sprintf('Milestone %d did not check out for storage.', $milestone->number), JLog::DEBUG);
+			}
+
+			try
+			{
+				$request->store();
+			}
+			catch (RuntimeException $e)
+			{
+				JLog::add(sprintf('Milestone %d was unable to be stored.  Error message `%s`.', $milestone->number, $e->getMessage()), JLog::DEBUG);
+			}
+		}
+	}
+
+	/**
 	 * Update the pull request information.
 	 *
 	 * @param   array  $pulls  The list of pull requests to update.
@@ -748,6 +836,26 @@ class PTRepository extends JModelDatabase
 				$request->closed_time = JFactory::getDate($pull->closed_at, 'GMT')->toSql();
 				$request->merged_time = JFactory::getDate($pull->merged_at, 'GMT')->toSql();
 				$request->data = $pull;
+
+				// Get the milestone foreign key if applicable.
+				if (isset($pull->milestone) && !empty($pull->milestone->number))
+				{
+					// Only look it up once.
+					if (empty($this->_milestoneLookup[(int) $pull->milestone->number]))
+					{
+						$query = $this->db->getQuery(true);
+						$query->select('m.milestone_id')
+							->from('#__milestones AS m')
+							->where('m.github_id = ' . (int) $pull->milestone->number);
+						$this->db->setQuery($query, 0, 1);
+						$milestoneId = $this->db->loadResult();
+
+						// Add the milestone to the lookup array.
+						$this->_milestoneLookup[(int) $pull->milestone->number] = ($milestoneId ? $milestoneId : null);
+					}
+
+					$request->milestone_id = (int) $this->_milestoneLookup[(int) $pull->milestone->number];
+				}
 
 				if (!$request->check())
 				{

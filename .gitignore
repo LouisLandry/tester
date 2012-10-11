@@ -7,6 +7,8 @@
 /build/phpdox/*
 /build/todo/*
 /etc/config.json
+/.buildpath
 /.project
+/.settings
 /cache.properties
 

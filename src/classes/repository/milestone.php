@@ -8,40 +8,26 @@
  */
 
 /**
- * CRUD class for repository Pull Requests.
+ * CRUD class for repository milestones.
  *
  * @package     Joomla.Tester
  * @subpackage  Repository
  * @since       1.0
  */
-class PTRepositoryRequest extends JTable
+class PTRepositoryMilestone extends JTable
 {
 
-	public $pull_id;
+	public $milestone_id;
 
 	public $github_id;
-
-	public $milestone_id;
 
 	public $title;
 
 	public $state;
 
-	public $is_mergeable;
-
-	public $is_merged;
-
-	public $user;
-
-	public $avatar_url;
-
 	public $created_time;
 
-	public $updated_time;
-
-	public $closed_time;
-
-	public $merged_time;
+	public $due_time;
 
 	public $data;
 
@@ -54,7 +40,7 @@ class PTRepositoryRequest extends JTable
 	 */
 	public function __construct($db)
 	{
-		parent::__construct('#__pull_requests', 'pull_id', $db);
+		parent::__construct('#__milestones', 'milestone_id', $db);
 
 		$this->data = (object) array();
 	}

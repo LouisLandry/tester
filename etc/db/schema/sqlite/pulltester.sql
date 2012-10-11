@@ -1,11 +1,24 @@
 -- Joomla Pull Request Tester Schema
 -- ---------------------------------
 
+
+CREATE TABLE "pt_milestones" (
+  milestone_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  github_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  state INTEGER NOT NULL,
+  created_time TEXT NOT NULL,
+  due_time TEXT NOT NULL,
+  data TEXT NOT NULL
+);
+
+
 -- Base pull request table for tracking the open pull requests.
 
 CREATE TABLE "pt_pull_requests" (
   pull_id INTEGER PRIMARY KEY AUTOINCREMENT,
   github_id INTEGER NOT NULL,
+  milestone_id INTEGER REFERENCES pt_milestones(milestone_id) ON UPDATE CASCADE ON DELETE SET NULL,
   title TEXT NOT NULL,
   state INTEGER NOT NULL,
   is_mergeable INTEGER NOT NULL,
