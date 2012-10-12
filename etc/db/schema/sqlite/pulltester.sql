@@ -59,7 +59,7 @@ CREATE TABLE "pt_pull_request_test_unit_test_reports" (
   assertion_count INTEGER NOT NULL,
   failure_count INTEGER NOT NULL,
   error_count INTEGER NOT NULL,
-  elapsed_time` FLOAT NOT NULL,
+  elapsed_time FLOAT NOT NULL,
   data TEXT NOT NULL
 );
 
@@ -78,6 +78,6 @@ CREATE TABLE "pt_repositories" (
   data TEXT NOT NULL
 );
 
-INSERT INTO "pt_repositories" ("repository_id", "title", "description", "http_url", "created_time", "updated_time", "style_error_count", "style_warning_count", "test_failure_count", "test_error_count", "data")
+INSERT INTO "pt_repositories" ("repository_id", "title", "description", "http_url", "created_time", "updated_time", "style_error_count", "style_warning_count", "test_failure_count", "test_error_count", "data", "head_revision")
 VALUES
-	(1, 'Joomla Platform', 'The Joomla Platform is a platform for writing Web and command line applications in PHP.', 'https://github.com/joomla/joomla-platform', '0000-00-00 00:00:00', '0000-00-00 00:00:00', 0, 0, 0, 0, '');
+	(1, 'Joomla Platform', 'The Joomla Platform is a platform for writing Web and command line applications in PHP.', 'https://github.com/joomla/joomla-platform', '0000-00-00 00:00:00', '0000-00-00 00:00:00', 0, 0, 0, 0, '', '92b45de705353229dc6ad9dec1295ea5c585b73b');
