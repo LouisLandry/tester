@@ -1,0 +1,26 @@
+#!/bin/bash
+SCRIPTNAME=`basename $0`
+PIDFILE=/var/run/${SCRIPTNAME}.pid
+
+if [ -f ${PIDFILE} ]; then
+   # Verify if the process is actually still running under this pid.
+   OLDPID=`cat ${PIDFILE}`
+   RESULT=`ps -ef | grep ${OLDPID} | grep ${SCRIPTNAME}`
+
+   if [ -n "${RESULT}" ]; then
+     echo "Script already running! Exiting."
+     exit 255
+   fi
+
+fi
+
+# Grab pid of this process and update the pid file with it.
+PID=`ps -ef | grep ${SCRIPTNAME} | head -n1 |  awk ' {print $2;} '`
+echo ${PID} > ${PIDFILE}
+
+## Run the script.
+/usr/local/joomla/tester/src/run.php update
+
+if [ -f ${PIDFILE} ]; then
+    rm ${PIDFILE}
+fi

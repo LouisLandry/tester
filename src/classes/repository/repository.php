@@ -57,9 +57,71 @@ class PTRepository extends JModelDatabase
 		$this->github = new JGithub;
 		$this->github->setOption('api.url', $this->state->get('github.api'));
 		$this->github->setOption('curl.certpath', JPATH_CONFIGURATION . '/cacert.pem');
+		$this->github->setOption('api.username', $this->state->get('github.username'));
+		$this->github->setOption('api.password', $this->state->get('github.password'));
 
 		// Instantiate the repository object.
 		$this->repo = new PTGitRepository($this->state->get('repo'));
+	}
+
+	/**
+	 * Test the master branch and update the database.
+	 *
+	 * @return  void
+	 *
+	 * @since   1.0
+	 */
+	public function clean()
+	{
+		// Get the repository object from the database.
+		$query = $this->db->getQuery(true);
+		$query->select('report_id')
+		->from('#__pull_request_test_unit_test_reports')
+		->where('(error_count > 0 OR failure_count > 0)');
+		$this->db->setQuery($query);
+
+		$list = $this->db->loadColumn();
+		foreach ($list as $report)
+		{
+			$unit = new PTTestReportUnittest($this->db);
+			$unit->load($report);
+
+			foreach ($unit->data->errors as $i => $error)
+			{
+				$error->message = str_replace("<br />", "\n", $error->message);
+				$unit->data->errors[$i] = $error;
+			}
+
+			foreach ($unit->data->failures as $i => $failure)
+			{
+				$failure->message = str_replace("<br />", "\n", $failure->message);
+				$unit->data->failures[$i] = $failure;
+			}
+
+			$unit->store();
+		}
+	}
+
+	public function cleanReleases()
+	{
+		$changedRequests = 0;
+		$releases = $this->_fetchReleases();
+
+		$requestsToChange = $this->_fetchRequestsToChangeMilestone($releases);
+		foreach ($requestsToChange as $issueId => $milestone)
+		{
+			$this->github->issues->edit(
+				$this->state->get('github.user'),
+				$this->state->get('github.repo'),
+				$issueId,
+				null, null, null, null,
+				$milestone
+			);
+
+			$changedRequests++;
+		}
+
+		return $changedRequests;
 	}
 
 	/**
@@ -297,44 +359,6 @@ class PTRepository extends JModelDatabase
 			// Get the next page of pull requests.
 			$page++;
 			$pulls = $this->github->pulls->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'open', $page, 100);
-		}
-	}
-
-	/**
-	 * Test the master branch and update the database.
-	 *
-	 * @return  void
-	 *
-	 * @since   1.0
-	 */
-	public function clean()
-	{
-		// Get the repository object from the database.
-		$query = $this->db->getQuery(true);
-		$query->select('report_id')
-			->from('#__pull_request_test_unit_test_reports')
-			->where('(error_count > 0 OR failure_count > 0)');
-		$this->db->setQuery($query);
-
-		$list = $this->db->loadColumn();
-		foreach ($list as $report)
-		{
-			$unit = new PTTestReportUnittest($this->db);
-			$unit->load($report);
-
-			foreach ($unit->data->errors as $i => $error)
-			{
-				$error->message = str_replace("<br />", "\n", $error->message);
-				$unit->data->errors[$i] = $error;
-			}
-
-			foreach ($unit->data->failures as $i => $failure)
-			{
-				$failure->message = str_replace("<br />", "\n", $failure->message);
-				$unit->data->failures[$i] = $failure;
-			}
-
-			$unit->store();
 		}
 	}
 
@@ -712,6 +736,51 @@ class PTRepository extends JModelDatabase
 	}
 
 	/**
+	 * Get a list of closed, and the current active release objects.  The objects have a milestone_id, github_id, due_time
+	 * and start_time properties.  The release cycle can be inferred from the time span between start and due time values.
+	 *
+	 * @return  array
+	 *
+	 * @since   1.0
+	 */
+	private function _fetchReleases()
+	{
+		$now = JFactory::getDate();
+
+		// Build the query to get the milestone release dates.
+		$query = $this->db->getQuery(true);
+		$query->select('m.milestone_id, m.github_id, m.due_time');
+		$query->from('#__milestones AS m');
+		$query->where('m.due_time <= ' . $query->q($now->format($query->dateFormat())));
+		$query->order('m.due_time ASC');
+
+		try
+		{
+			$this->db->setQuery($query);
+			$releases = $this->db->loadObjectList();
+		}
+		catch (RuntimeException $e)
+		{
+			JLog::add('Error: ' . $e->getMessage(), JLog::DEBUG);
+		}
+
+		// Set the start times for the releases based on the previous release.
+		for ($i=0,$n=count($releases); $i < $n; $i++)
+		{
+		if (isset($releases[$i-1]))
+		{
+		$releases[$i]->start_time = $releases[$i-1]->due_time;
+		}
+		else
+		{
+		$releases[$i]->start_time = $this->db->getNullDate();
+		}
+		}
+
+		return $releases;
+	}
+
+	/**
 	 * Get the repository object from the database.
 	 *
 	 * @return  object
@@ -751,6 +820,78 @@ class PTRepository extends JModelDatabase
 		}
 
 		return $this->_repository;
+	}
+
+	/**
+	 * Get an array of "github_request_id" => "github_milestone_id" values for pull requests that should have milestone
+	 * values changed.  The merged pull requests are inspected based on the timeframe of the given release cycles and
+	 * if necessary, they are set to have the milestone number changed so that they correctly indicate which release
+	 * they were a part of.  Additionally, non-merged pull requests are removed from any released versions.
+	 *
+	 * @param   array  $releases  An array of release objects.
+	 *
+	 * @return  array
+	 * @since   1.0
+	 */
+	private function _fetchRequestsToChangeMilestone(array $releases)
+	{
+		$requestsToChange = array();
+
+		// Find all issues merged during the release cycle which are not tagged for the release.
+		foreach ($releases as $release)
+		{
+			$query = $this->db->getQuery(true);
+			$query->select('r.github_id');
+			$query->from('#__pull_requests AS r');
+			$query->where('r.is_merged = 1');
+			$query->where('(r.milestone_id IS NULL OR r.milestone_id <> ' . (int) $release->milestone_id . ')');
+			$query->where('r.merged_time > ' . $query->q($release->start_time));
+			$query->where('r.merged_time < ' . $query->q($release->due_time));
+
+			try
+			{
+				$this->db->setQuery($query);
+				$requests = $this->db->loadColumn();
+
+				foreach ($requests as $request)
+				{
+					$requestsToChange[(int) $request] = (int) $release->github_id;
+				}
+			}
+			catch (RuntimeException $e)
+			{
+				JLog::add('Error: ' . $e->getMessage(), JLog::DEBUG);
+			}
+		}
+
+		// Find all issues not-merged during the release cycle which are tagged for the release.
+		foreach ($releases as $release)
+		{
+			$query = $this->db->getQuery(true);
+			$query->select('r.github_id');
+			$query->from('#__pull_requests AS r');
+			$query->where('r.is_merged = 0');
+			$query->where('r.milestone_id = ' . (int) $release->milestone_id);
+			$query->where('r.merged_time > ' . $query->q($release->start_time));
+			$query->where('r.merged_time < ' . $query->q($release->due_time));
+
+			try
+			{
+				$this->db->setQuery($query);
+				$requests = $this->db->loadColumn();
+
+				foreach ($requests as $request)
+				{
+					$requestsToChange[(int) $request] = 0;
+				}
+			}
+			catch (RuntimeException $e)
+			{
+				JLog::add('Error: ' . $e->getMessage(), JLog::DEBUG);
+			}
+		}
+
+		return $requestsToChange;
 	}
 
 	/**

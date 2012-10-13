@@ -34,16 +34,18 @@
 		"api": "https://api.github.com",
 		"host": "https://github.com",
 		"user": "joomla",
-		"repo": "joomla-platform"
+		"repo": "joomla-platform",
+		"username": "",
+		"password": ""
 	},
 
 	"phpcs":{
 		"standard": "Joomla",
 		"paths": [
-			"libraries/joomla", 
-			"libraries/legacy", 
-			"libraries/platform.php", 
-			"libraries/loader.php", 
+			"libraries/joomla",
+			"libraries/legacy",
+			"libraries/platform.php",
+			"libraries/loader.php",
 			"libraries/import.php"
 		]
 	},
@@ -59,7 +61,7 @@
 	"cache_enabled":"0",
 	"cache_ttl":"30",
 	"cache_handler":"file",
-	
+
 	"session_lifetime":"60",
 	"session_handler":"database"
 }
