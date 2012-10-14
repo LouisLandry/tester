@@ -56,6 +56,7 @@ try
 
 	// Instantiate the application.
 	$application = JApplicationWeb::getInstance('PTApplicationWeb');
+	$application->input = new JInputJSON();
 
 	// Store the application.
 	JFactory::$application = $application;

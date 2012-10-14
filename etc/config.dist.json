@@ -31,12 +31,14 @@
 	"app_identity":null,
 
 	"github":{
-		"api": "https://api.github.com",
 		"host": "https://github.com",
 		"user": "joomla",
 		"repo": "joomla-platform",
-		"username": "",
-		"password": ""
+		"api": {
+			"url": "https://api.github.com",
+			"username": "",
+			"password": ""
+		}
 	},
 
 	"phpcs":{

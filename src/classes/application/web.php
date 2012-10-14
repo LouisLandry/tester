@@ -73,6 +73,7 @@ class PTApplicationWeb extends JApplicationWeb
 		$router = new JApplicationWebRouterRest($this);
 		$router->setControllerPrefix('PTService')
 			->setDefaultController('date')
+			->addMap('/hook', 'hook')
 			->execute($this->get('uri.route'));
 	}
 
