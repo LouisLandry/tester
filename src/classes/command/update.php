@@ -31,7 +31,7 @@ class PTCommandUpdate extends JControllerBase
 		$state = new JRegistry;
 
 		// Add the GitHub configuration values.
-		$state->set('github.api', $this->app->get('github.api'));
+		$state->set('github.api', $this->app->get('github.api.url'));
 		$state->set('github.host', $this->app->get('github.host'));
 		$state->set('github.user', $this->app->get('github.user'));
 		$state->set('github.repo', $this->app->get('github.repo'));
