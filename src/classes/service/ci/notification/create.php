@@ -52,8 +52,7 @@ class PTServiceCiNotificationCreate extends JControllerBase
 			)
 		);
 
-		// Log the event.
-		file_put_contents(sys_get_temp_dir() . '/jenkins-' . time() . '.txt', print_r($data, 1));
+		// Here we need to go get the build logs and get the data into the database.
 
 		$this->app->setBody('{}');
 	}
