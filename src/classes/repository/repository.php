@@ -228,6 +228,24 @@ class PTRepository extends JModelDatabase
 	}
 
 	/**
+	 * Method to reopen a pull request..
+	 *
+	 * @return  void
+	 *
+	 * @since   1.0
+	 */
+	public function openRequest($githubId)
+	{
+		$this->github->pulls->edit(
+			$this->app->get('github.user'),
+			$this->app->get('github.repo'),
+			$githubId,
+			null, null,
+			'open'
+		);
+	}
+
+	/**
 	 * Method to synchronize the local testing repository with the github repository.
 	 *
 	 * @return  void

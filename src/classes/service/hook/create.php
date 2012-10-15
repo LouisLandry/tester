@@ -36,6 +36,24 @@ class PTServiceHookCreate extends JControllerBase
          */
 	public function execute()
 	{
+		// Create the model state object.
+		$state = new JRegistry;
+
+		// Add the GitHub configuration values.
+		$state->set('github.api', $this->app->get('github.api.url'));
+		$state->set('github.username', $this->app->get('github.api.username'));
+		$state->set('github.password', $this->app->get('github.api.password'));
+		$state->set('github.host', $this->app->get('github.host'));
+		$state->set('github.user', $this->app->get('github.user'));
+		$state->set('github.repo', $this->app->get('github.repo'));
+
+		// Build the repository path.
+		$repoPath = $this->app->get('repo_path', sys_get_temp_dir());
+		$state->set('repo', $repoPath . '/' . $this->app->get('github.user') . '/' . $this->app->get('github.repo'));
+
+		// Get the repository model.
+		$repository = new PTRepository($state);
+
 		// Grab data from the hook.
 		$data = $this->input->getArray(
 			array(
@@ -59,19 +77,20 @@ class PTServiceHookCreate extends JControllerBase
 				'pull_request' => 'array'
 			)
 		);
-		file_put_contents('/tmp/servicelog-' . time() . '.txt', print_r($this->input, 1));
+
+		// Log the event.
+		file_put_contents(sys_get_temp_dir() . '/servicelog-' . time() . '.txt', print_r($this->input, 1));
 
 		// For some reason we didn't get an action.
 		if (!isset($data['action']))
 		{
-			parent::execute();
 			return;
 		}
 
 		// Check to see if this is a new pull request
 		if (isset($data['pull_request']) && !empty($data['pull_request']))
 		{
-			// do something, check the action is opened or something...
+			file_put_contents(sys_get_temp_dir() . '/newpull-' . time() . '.txt', print_r($data['pull_request'], 1));
 		}
 
 		// Check to see if we have a comment...
@@ -80,14 +99,8 @@ class PTServiceHookCreate extends JControllerBase
 			// Validate if this is a reopen request.
 			if ($data['action'] == 'created' && stristr($data['comment']['body'], '!reopen') !== false && isset($data['issue']['pull_request']))
 			{
-				// Set the options.
-				$options = new JRegistry;
-				$options->set('api.username', $this->app->get('github.api.username'));
-				$options->set('api.password', $this->app->get('github.api.password'));
-				$options->set('api.url', $this->app->get('github.api.url'));
-				$ghHttp = new JGithubHttp(new JRegistry, new JHttpTransportStream(new JRegistry));
-				$gh = new JGithub($options, $ghHttp);
-				$gh->pulls->edit($this->app->get('github.user'), $this->app->get('github.repo'), $data['issue']['number'], null, null, 'open');
+				file_put_contents(sys_get_temp_dir() . '/reopen-' . time() . '.txt', $data['issue']['number']);
+				//$repository->openRequest($data['issue']['number']);
 			}
 		}
 
