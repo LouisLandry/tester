@@ -39,10 +39,11 @@ class PTServiceCiNotificationCreate extends JControllerBase
 		// Grab data from the end point.
 		$data = $this->input->getArray(
 			array(
-				'name' => 'int',
-				'url' => 'array',
+				'name' => 'string',
+				'url' => 'string',
 				'build' => array(
-					'phase' => 'string',
+					'number' => 'integer',
+					'phase' => 'word',
 					'status' => 'word',
 					'url' => 'string',
 					'fullUrl' => 'string',
@@ -52,7 +53,7 @@ class PTServiceCiNotificationCreate extends JControllerBase
 		);
 
 		// Log the event.
-		file_put_contents(sys_get_temp_dir() . '/jenkins-' . time() . '.txt', print_r($this->input, 1));
+		file_put_contents(sys_get_temp_dir() . '/jenkins-' . time() . '.txt', print_r($data, 1));
 
 		$this->app->setBody('{}');
 	}
