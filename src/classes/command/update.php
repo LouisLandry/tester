@@ -1,7 +1,7 @@
 <?php
 /**
  * @package     Joomla.Tester
- * @subpackage  Controller
+ * @subpackage  Command
  *
  * @copyright   Copyright (C) 2011 Open Source Matters, Inc. All rights reserved.
  * @license     GNU General Public License version 2 or later; see LICENSE
@@ -12,10 +12,10 @@
  * from GitHub.
  *
  * @package     Joomla.Tester
- * @subpackage  Controller
+ * @subpackage  Command
  * @since       1.0
  */
-class PTCommandUpdate extends JControllerBase
+class PTCommandUpdate extends PTCommand
 {
 	/**
 	 * Method to execute the controller.
@@ -28,22 +28,7 @@ class PTCommandUpdate extends JControllerBase
 	public function execute()
 	{
 		// Create the model state object.
-		$state = new JRegistry;
-
-		// Add the GitHub configuration values.
-		$state->set('github.api', $this->app->get('github.api.url'));
-		$state->set('github.host', $this->app->get('github.host'));
-		$state->set('github.user', $this->app->get('github.user'));
-		$state->set('github.repo', $this->app->get('github.repo'));
-
-		$repoPath = $this->app->get('repo_path', sys_get_temp_dir());
-
-		// Build the repository path.
-		$state->set('repo', $repoPath . '/' . $this->app->get('github.user') . '/' . $this->app->get('github.repo'));
-
-		// Add the PHPCS testing configuration values.
-		$state->set('phpcs.standard', $this->app->get('phpcs.standard'));
-		$state->set('phpcs.paths', $this->app->get('phpcs.paths'));
+		$state = $this->fetchState();
 
 		// Get the repository model.
 		$model = new PTRepository($state);

@@ -430,6 +430,29 @@ class PTRepository extends JModelDatabase
 	}
 
 	/**
+	 * Test a pull request by either GitHub id or local id.
+	 *
+	 * @param   integer  $githubId  The GitHub pull request id number.
+	 * @param   integer  $pullId    The internal primary key for the pull request.
+	 *
+	 * @return  void
+	 *
+	 * @since   1.0
+	 */
+	public function testRequest($githubId, $pullId = null)
+	{
+		$request = $this->getRequest($githubId, $pullId);
+
+		// Enqueue the test with the build server.
+		$this->enqueueRequestTest(
+			$request->github_id,
+			$request->data->head->repo->owner->login,
+			$request->data->head->repo->name,
+			$request->data->head->ref
+		);
+	}
+
+	/**
 	 * Test an array of pull requests.
 	 *
 	 * @param   object  $request  The requests to test.
@@ -438,7 +461,7 @@ class PTRepository extends JModelDatabase
 	 *
 	 * @since   1.0
 	 */
-	public function testRequest($request)
+	public function saveTestRequest($request)
 	{
 		// Initialize variables.
 		$branchName = 'pr-' . $request->github_id;
@@ -543,6 +566,38 @@ class PTRepository extends JModelDatabase
 		$this->_teardownTestingBranch($branchName, $branchOwner, $branchUrl, $branchRef);
 
 		return $this;
+	}
+
+	/**
+	 * Enqueue a pull request test by either GitHub id or local id.
+	 *
+	 * @param   integer  $githubPullId  The GitHub pull request id number.
+	 * @param   string   $githubUser    The GitHub user whose repository we are testing.
+	 * @param   string   $githubRepo    The GitHub repository to test.
+	 * @param   string   $githubBranch  The GitHub branch in the repository to test.
+	 * @param   string   $cause         The reason for enqueuing test.
+	 *
+	 * @return  void
+	 *
+	 * @since   1.0
+	 */
+	protected function enqueueRequestTest($githubPullId, $githubUser, $githubRepo, $githubBranch, $cause = 'Joomla Tester')
+	{
+		$http = JHttpFactory::getHttp();
+
+		$uri = new JUri($this->state->get('jenkins.url') . '/job/' . $this->state->get('jenkins.job') . '/buildWithParameters');
+		$uri->setVar('token', urlencode($this->state->get('jenkins.token')));
+		$uri->setVar('cause', urlencode($cause));
+		$uri->setVar('pull_id', (int) $githubPullId);
+		$uri->setVar('github_user', urlencode($githubUser));
+		$uri->setVar('github_repo', urlencode($githubRepo));
+		$uri->setVar('github_branch', urlencode($githubBranch));
+
+		$response = $http->get($uri->toString());
+		if ($response->code != 200)
+		{
+			throw new RuntimeException($response->body, $response->code);
+		}
 	}
 
 	/**

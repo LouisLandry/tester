@@ -1,7 +1,7 @@
 <?php
 /**
  * @package     Joomla.Tester
- * @subpackage  Controller
+ * @subpackage  Command
  *
  * @copyright   Copyright (C) 2011 Open Source Matters, Inc. All rights reserved.
  * @license     GNU General Public License version 2 or later; see LICENSE
@@ -11,7 +11,7 @@
  * Joomla Pull Request Tester Install Controller
  *
  * @package     Joomla.Tester
- * @subpackage  Controller
+ * @subpackage  Command
  * @since       1.0
  */
 class PTCommandInstall extends JControllerBase
