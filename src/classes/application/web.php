@@ -74,6 +74,7 @@ class PTApplicationWeb extends JApplicationWeb
 		$router->setControllerPrefix('PTService')
 			->setDefaultController('date')
 			->addMap('/hook', 'hook')
+			->addMap('/ci/notification', 'ciNotification')
 			->execute($this->get('uri.route'));
 	}
 
