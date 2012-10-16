@@ -70,11 +70,13 @@ class PTApplicationWeb extends JApplicationWeb
 	 */
 	protected function doExecute()
 	{
+		// Get the route maps from configuration file.
+		$maps = json_decode(file_get_contents(JPATH_CONFIGURATION . '/routes.json'), true);
+
 		$router = new JApplicationWebRouterRest($this);
 		$router->setControllerPrefix('PTService')
 			->setDefaultController('date')
-			->addMap('/hook', 'hook')
-			->addMap('/ci/notification', 'ciNotification')
+			->addMaps($maps)
 			->execute($this->get('uri.route'));
 	}
 
