@@ -26,33 +26,24 @@
  */
 class PTServiceHookCreate extends JControllerBase
 {
-        /**
-         * Method to execute the controller.
-         *
-         * @return  void
-         *
-         * @since   1.0
-         * @throws  RuntimeException
-         */
+	/**
+	 * Method to execute the controller.
+	 *
+	 * @return  void
+	 *
+	 * @since   1.0
+	 * @throws  RuntimeException
+	 */
 	public function execute()
 	{
 		// Create the model state object.
-		$state = new JRegistry;
-
-		// Add the GitHub configuration values.
-		$state->set('github.api', $this->app->get('github.api.url'));
-		$state->set('github.username', $this->app->get('github.api.username'));
-		$state->set('github.password', $this->app->get('github.api.password'));
-		$state->set('github.host', $this->app->get('github.host'));
-		$state->set('github.user', $this->app->get('github.user'));
-		$state->set('github.repo', $this->app->get('github.repo'));
-
-		// Build the repository path.
-		$repoPath = $this->app->get('repo_path', sys_get_temp_dir());
-		$state->set('repo', $repoPath . '/' . $this->app->get('github.user') . '/' . $this->app->get('github.repo'));
+		$state = $this->_buildModelState();
 
 		// Get the repository model.
 		$repository = new PTRepository($state);
+
+		// Get the event type from the request.
+		$eventType = $this->input->get->getCmd('event_type');
 
 		// Grab data from the hook.
 		$data = $this->input->getArray(
@@ -78,32 +69,162 @@ class PTServiceHookCreate extends JControllerBase
 			)
 		);
 
-		// Log the event.
-		file_put_contents(sys_get_temp_dir() . '/servicelog-' . time() . '.txt', print_r($this->input, 1));
+		// Log the event notification.
+		$this->_logNotification($eventType, $data);
 
-		// For some reason we didn't get an action.
-		if (!isset($data['action']))
+		// Handle the events.
+		switch ($eventType)
+		{
+			case 'pull_request':
+				$this->handlePullRequest($data, $repository);
+				break;
+
+			case 'issue_comment':
+			case 'commit_comment':
+				$this->handleComment($data, $repository);
+				break;
+		}
+	}
+
+	/**
+	 * Handle any sort of issue or commit comment event.
+	 *
+	 * @param   array  $data
+	 *
+	 * @return  void
+	 *
+	 * @since   1.0
+	 */
+	protected function handleComment(array $data, PTRepository $repository)
+	{
+		// We are only interested in new comments.
+		if ($data['action'] != 'created')
 		{
 			return;
 		}
 
-		// Check to see if this is a new pull request
-		if (isset($data['pull_request']) && !empty($data['pull_request']))
+		// We are also not interested in comments not on pull requests.
+		if (!isset($data['issue']['pull_request']))
 		{
-			file_put_contents(sys_get_temp_dir() . '/newpull-' . time() . '.txt', print_r($data['pull_request'], 1));
+			return;
 		}
 
-		// Check to see if we have a comment...
-		if (isset($data['comment']) && !empty($data['comment']))
+		// We are only interested in comments by the author of the pull request.
+		if ($data['comment']['user']['login'] != $data['issue']['user']['login'])
 		{
-			// Validate if this is a reopen request.
-			if ($data['action'] == 'created' && stristr($data['comment']['body'], '!reopen') !== false && isset($data['issue']['pull_request']))
+			return;
+		}
+
+		// Validate if this is a comment to reopen the request.
+		if (stristr($data['comment']['body'], 'reopen') !== false || stristr($data['comment']['body'], 're-open') !== false)
+		{
+			JLog::add(
+				sprintf(
+					'New comment found on pull request `%d` by `%s`.',
+					(int) $data['issue']['number'],
+					$data['comment']['user']['login']
+				),
+				JLog::INFO,
+				'github-comments'
+			);
+
+			try
 			{
-				file_put_contents(sys_get_temp_dir() . '/reopen-' . time() . '.txt', $data['issue']['number']);
-				//$repository->openRequest($data['issue']['number']);
+				$repository->openRequest($data['issue']['number']);
+			}
+			catch (Exception $e)
+			{
+				// Just let it go.
 			}
 		}
+	}
 
-		$this->app->setBody('{}');
+	/**
+	 * Handle a pull request event.
+	 *
+	 * @param   array  $data
+	 *
+	 * @return  void
+	 *
+	 * @since   1.0
+	 */
+	protected function handlePullRequest(array $data, PTRepository $repository)
+	{
+		// Only handle actions where we want to trigger a build.
+		if (in_array($data['action'], array('opened', 'synchronize', 'reopened')))
+		{
+			JLog::add(
+				sprintf(
+					'Pull request change for request `%d`.  Triggering a test build.',
+					(int) $data['pull_request']['number']
+				),
+				JLog::INFO,
+				'github-pull-requests'
+			);
+
+			$repository->saveRequest($data['pull_request']);
+			$repository->testRequest((int) $data['pull_request']['number']);
+		}
+	}
+
+	/**
+	 * Build and return a model state object.
+	 *
+	 * @return  JRegistry
+	 *
+	 * @since   1.0
+	 */
+	private function _buildModelState()
+	{
+		// Create the model state object.
+		$state = new JRegistry;
+
+		// Add the GitHub configuration values.
+		$state->set('github.api', $this->app->get('github.api.url'));
+		$state->set('github.username', $this->app->get('github.api.username'));
+		$state->set('github.password', $this->app->get('github.api.password'));
+		$state->set('github.host', $this->app->get('github.host'));
+		$state->set('github.user', $this->app->get('github.user'));
+		$state->set('github.repo', $this->app->get('github.repo'));
+
+		// Build the repository path.
+		$repoPath = $this->app->get('repo_path', sys_get_temp_dir());
+		$state->set('repo', $repoPath . '/' . $this->app->get('github.user') . '/' . $this->app->get('github.repo'));
+
+		// Add the PHPCS testing configuration values.
+		$state->set('phpcs.standard', $this->app->get('phpcs.standard'));
+		$state->set('phpcs.paths', $this->app->get('phpcs.paths'));
+
+		// Add the Jenkins configuration values.
+		$state->set('jenkins.url', $this->app->get('jenkins.url'));
+		$state->set('jenkins.job', $this->app->get('jenkins.job'));
+		$state->set('jenkins.token', $this->app->get('jenkins.token'));
+
+		return $state;
+	}
+
+	/**
+	 * Log the event.
+	 *
+	 * @param   string  $eventType  The event type for which to log.
+	 * @param   array   $data       The event data to log.
+	 *
+	 * @return  void
+	 *
+	 * @since   1.0
+	 */
+	private function _logNotification($eventType, array $data)
+	{
+		// Log that the event was captured.
+		JLog::add(
+			sprintf(
+				'GitHub has sent an `%s` event with action `%s` id `%d`.',
+				$eventType,
+				$data['action'],
+				(int) $data['number']
+			),
+			JLog::INFO,
+			'github'
+		);
 	}
 }

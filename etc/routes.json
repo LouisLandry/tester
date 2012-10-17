@@ -1,5 +1,5 @@
 {
+	"github/:event_type": "hook",
 	"ci/notification": "jenkinsNotification",
-	"date": "date",
-	"hook": "hook"
+	"date": "date"
 }

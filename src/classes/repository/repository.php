@@ -236,13 +236,28 @@ class PTRepository extends JModelDatabase
 	 */
 	public function openRequest($githubId)
 	{
-		$this->github->pulls->edit(
-			$this->app->get('github.user'),
-			$this->app->get('github.repo'),
-			$githubId,
-			null, null,
-			'open'
-		);
+		// Make sure that the pull request is not already merged.
+		$query = $this->db->getQuery(true);
+		$query->select('r.is_merged')
+			->from('#__pull_requests AS r')
+			->where('r.github_id = ' . (int) $githubId);
+		$this->db->setQuery($query, 0, 1);
+		$isMerged = (int) $this->db->loadResult();
+
+		if (!$isMerged)
+		{
+			$this->github->pulls->edit(
+				$this->app->get('github.user'),
+				$this->app->get('github.repo'),
+				$githubId,
+				null, null,
+				'open'
+			);
+		}
+		else
+		{
+			throw new InvalidArgumentException(sprintf('Cannot open merged pull request %d.', (int) $githubId));
+		}
 	}
 
 	/**
@@ -272,184 +287,23 @@ class PTRepository extends JModelDatabase
 	}
 
 	/**
-	 * Method to synchronize the local milestone metadata with the github repository.
+	 * Save a pull request.
+	 *
+	 * @param   object  $pull
 	 *
 	 * @return  void
 	 *
 	 * @since   1.0
+	 * @throws  InvalidArgumentException
 	 */
-	public function syncMilestones()
+	public function saveRequest($pull)
 	{
-		// Synchronize closed milestones first.
-		$page = 1;
-		$milestones = $this->github->milestones->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'closed', 'due_at', 'desc', $page, 100);
-
-		// Paginate over closed milestones until there aren't any more.
-		while (!empty($milestones))
+		if (!isset($pull->number) || !isset($pull->mergeable) || !isset($pull->merged))
 		{
-			// Process the milestones.
-			$this->_processMilestones($milestones);
-
-			// Get the next page of milestones.
-			$page++;
-			$milestones = $this->github->milestones->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'closed', 'due_at', 'desc', $page, 100);
+			throw new InvalidArgumentException('Unable to save the poorly formed pull request.');
 		}
 
-		// Synchronize open milestones next.
-		$page = 1;
-		$milestones = $this->github->milestones->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'open', 'due_at', 'desc', $page, 100);
-
-		// Paginate over open milestones until there aren't any more.
-		while (!empty($milestones))
-		{
-			// Process the milestones.
-			$this->_processMilestones($milestones);
-
-			// Get the next page of milestones.
-			$page++;
-			$milestones = $this->github->milestones->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'open', 'due_at', 'desc', $page, 100);
-		}
-	}
-
-	/**
-	 * Method to synchronize the local pull request metadata with the github repository.
-	 *
-	 * @param   boolean  $full  True to do a full pass over the pull requests.
-	 *
-	 * @return  void
-	 *
-	 * @since   1.0
-	 */
-	public function syncRequests($full = false)
-	{
-		// Get the last updated pull request row.
-		$query = $this->db->getQuery(true);
-		$query->select('r.updated_time')
-			->from('#__pull_requests AS r')
-			->order('r.updated_time DESC');
-		$this->db->setQuery($query, 0, 1);
-
-		$lastUpdated = $this->db->loadResult();
-		if ($lastUpdated)
-		{
-			$lastUpdated = new JDate($lastUpdated);
-		}
-
-		// Synchronize closed pull requests first.
-		$page = 1;
-		$pulls = $this->github->pulls->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'closed', $page, 100);
-
-		// Paginate over closed pull requests until there aren't any more.
-		while (!empty($pulls))
-		{
-			// Only process pull requests if there is something to update.
-			$updated = new JDate($pulls[0]->updated_at);
-			if (!is_null($lastUpdated) && $lastUpdated >= $updated && !$full)
-			{
-				break;
-			}
-
-			// Process the pull requests.
-			$this->_processRequests($pulls);
-
-			// Get the next page of pull requests.
-			$page++;
-			$pulls = $this->github->pulls->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'closed', $page, 100);
-		}
-
-		// Synchronize open pull requests first.
-		$page = 1;
-		$pulls = $this->github->pulls->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'open', $page, 100);
-
-		// Paginate over open pull requests until there aren't any more.
-		while (!empty($pulls))
-		{
-			// Only process pull requests if there is something to update.
-			$updated = new JDate($pulls[0]->updated_at);
-			if (!is_null($lastUpdated) && $lastUpdated >= $updated && !$full)
-			{
-				break;
-			}
-
-			// Process the pull requests.
-			$this->_processRequests($pulls);
-
-			// Get the next page of pull requests.
-			$page++;
-			$pulls = $this->github->pulls->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'open', $page, 100);
-		}
-	}
-
-	/**
-	 * Test the master branch and update the database.
-	 *
-	 * @return  void
-	 *
-	 * @since   1.0
-	 */
-	public function testMaster()
-	{
-		$this->resetToStaging();
-
-		$sha = $this->repo->getHeadSHA();
-
-		// Get the repository object.
-		$repository = $this->_fetchRepositoryObject();
-
-		// If the current head revision is the same as our saved one then there is nothing to do.
-		if ($sha == $repository->head_revision)
-		{
-			return;
-		}
-
-		// Reset some repository values.
-		$repository->head_revision = $sha;
-		$now = new JDate;
-		$repository->updated_time = $now->toSql();
-
-		// Create the checkstyle report object.
-		$checkstyle = new PTTestReportCheckstyle($this->db);
-
-		try
-		{
-			$checkstyle = $this->runCheckstyleReport($checkstyle);
-			$repository->style_error_count = $checkstyle->error_count;
-			$repository->style_warning_count = $checkstyle->warning_count;
-			$repository->data->checkstyle->errors = $checkstyle->data->errors;
-			$repository->data->checkstyle->warnings = $checkstyle->data->warnings;
-		}
-		catch (RuntimeException $e)
-		{
-			$repository->data->checkstyle = false;
-			JLog::add(sprintf('Checkstyle could not be run for the master branch.  Error message `%s`.', $e->getMessage()), JLog::DEBUG);
-		}
-
-		// Update the database with our new information.
-		$repository->data = json_encode($repository->data);
-		$this->db->updateObject('#__repositories', $repository, 'repository_id');
-	}
-
-	/**
-	 * Test a pull request by either GitHub id or local id.
-	 *
-	 * @param   integer  $githubId  The GitHub pull request id number.
-	 * @param   integer  $pullId    The internal primary key for the pull request.
-	 *
-	 * @return  void
-	 *
-	 * @since   1.0
-	 */
-	public function testRequest($githubId, $pullId = null)
-	{
-		$request = $this->getRequest($githubId, $pullId);
-
-		// Enqueue the test with the build server.
-		$this->enqueueRequestTest(
-			$request->github_id,
-			$request->data->head->repo->owner->login,
-			$request->data->head->repo->name,
-			$request->data->head->ref
-		);
+		$this->_processRequest($pull);
 	}
 
 	/**
@@ -461,7 +315,7 @@ class PTRepository extends JModelDatabase
 	 *
 	 * @since   1.0
 	 */
-	public function saveTestRequest($request)
+	public function saveRequestTest($request)
 	{
 		// Initialize variables.
 		$branchName = 'pr-' . $request->github_id;
@@ -566,6 +420,193 @@ class PTRepository extends JModelDatabase
 		$this->_teardownTestingBranch($branchName, $branchOwner, $branchUrl, $branchRef);
 
 		return $this;
+	}
+
+	/**
+	 * Method to synchronize the local milestone metadata with the github repository.
+	 *
+	 * @return  void
+	 *
+	 * @since   1.0
+	 */
+	public function syncMilestones()
+	{
+		// Synchronize closed milestones first.
+		$page = 1;
+		$milestones = $this->github->milestones->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'closed', 'due_at', 'desc', $page, 100);
+
+		// Paginate over closed milestones until there aren't any more.
+		while (!empty($milestones))
+		{
+			// Process the milestones.
+			$this->_processMilestones($milestones);
+
+			// Get the next page of milestones.
+			$page++;
+			$milestones = $this->github->milestones->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'closed', 'due_at', 'desc', $page, 100);
+		}
+
+		// Synchronize open milestones next.
+		$page = 1;
+		$milestones = $this->github->milestones->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'open', 'due_at', 'desc', $page, 100);
+
+		// Paginate over open milestones until there aren't any more.
+		while (!empty($milestones))
+		{
+			// Process the milestones.
+			$this->_processMilestones($milestones);
+
+			// Get the next page of milestones.
+			$page++;
+			$milestones = $this->github->milestones->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'open', 'due_at', 'desc', $page, 100);
+		}
+	}
+
+	/**
+	 * Method to synchronize the local pull request metadata with the github repository.
+	 *
+	 * @param   boolean  $full  True to do a full pass over the pull requests.
+	 *
+	 * @return  void
+	 *
+	 * @since   1.0
+	 */
+	public function syncRequests($full = false)
+	{
+		// Get the last updated pull request row.
+		$query = $this->db->getQuery(true);
+		$query->select('r.updated_time')
+			->from('#__pull_requests AS r')
+			->order('r.updated_time DESC');
+		$this->db->setQuery($query, 0, 1);
+
+		$lastUpdated = $this->db->loadResult();
+		if ($lastUpdated)
+		{
+			$lastUpdated = new JDate($lastUpdated);
+		}
+
+		// Synchronize closed pull requests first.
+		$page = 1;
+		$pulls = $this->github->pulls->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'closed', $page, 100);
+
+		// Paginate over closed pull requests until there aren't any more.
+		while (!empty($pulls))
+		{
+			// Only process pull requests if there is something to update.
+			$updated = new JDate($pulls[0]->updated_at);
+			if (!is_null($lastUpdated) && $lastUpdated >= $updated && !$full)
+			{
+				break;
+			}
+
+			// Iterate the incoming pull requests and make sure they are all synchronized with our database.
+			foreach ($pulls as $pull)
+			{
+				$this->_processRequest($pull);
+			}
+
+			// Get the next page of pull requests.
+			$page++;
+			$pulls = $this->github->pulls->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'closed', $page, 100);
+		}
+
+		// Synchronize open pull requests first.
+		$page = 1;
+		$pulls = $this->github->pulls->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'open', $page, 100);
+
+		// Paginate over open pull requests until there aren't any more.
+		while (!empty($pulls))
+		{
+			// Only process pull requests if there is something to update.
+			$updated = new JDate($pulls[0]->updated_at);
+			if (!is_null($lastUpdated) && $lastUpdated >= $updated && !$full)
+			{
+				break;
+			}
+
+			// Iterate the incoming pull requests and make sure they are all synchronized with our database.
+			foreach ($pulls as $pull)
+			{
+				$this->_processRequest($pull);
+			}
+
+			// Get the next page of pull requests.
+			$page++;
+			$pulls = $this->github->pulls->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'open', $page, 100);
+		}
+	}
+
+	/**
+	 * Test the master branch and update the database.
+	 *
+	 * @return  void
+	 *
+	 * @since   1.0
+	 */
+	public function testMaster()
+	{
+		$this->resetToStaging();
+
+		$sha = $this->repo->getHeadSHA();
+
+		// Get the repository object.
+		$repository = $this->_fetchRepositoryObject();
+
+		// If the current head revision is the same as our saved one then there is nothing to do.
+		if ($sha == $repository->head_revision)
+		{
+			return;
+		}
+
+		// Reset some repository values.
+		$repository->head_revision = $sha;
+		$now = new JDate;
+		$repository->updated_time = $now->toSql();
+
+		// Create the checkstyle report object.
+		$checkstyle = new PTTestReportCheckstyle($this->db);
+
+		try
+		{
+			$checkstyle = $this->runCheckstyleReport($checkstyle);
+			$repository->style_error_count = $checkstyle->error_count;
+			$repository->style_warning_count = $checkstyle->warning_count;
+			$repository->data->checkstyle->errors = $checkstyle->data->errors;
+			$repository->data->checkstyle->warnings = $checkstyle->data->warnings;
+		}
+		catch (RuntimeException $e)
+		{
+			$repository->data->checkstyle = false;
+			JLog::add(sprintf('Checkstyle could not be run for the master branch.  Error message `%s`.', $e->getMessage()), JLog::DEBUG);
+		}
+
+		// Update the database with our new information.
+		$repository->data = json_encode($repository->data);
+		$this->db->updateObject('#__repositories', $repository, 'repository_id');
+	}
+
+	/**
+	 * Test a pull request by either GitHub id or local id.
+	 *
+	 * @param   integer  $githubId  The GitHub pull request id number.
+	 * @param   integer  $pullId    The internal primary key for the pull request.
+	 *
+	 * @return  void
+	 *
+	 * @since   1.0
+	 */
+	public function testRequest($githubId, $pullId = null)
+	{
+		$request = $this->getRequest($githubId, $pullId);
+
+		// Enqueue the test with the build server.
+		$this->enqueueRequestTest(
+			$request->github_id,
+			$request->data->head->repo->owner->login,
+			$request->data->head->repo->name,
+			$request->data->head->ref
+		);
 	}
 
 	/**
@@ -1018,72 +1059,68 @@ class PTRepository extends JModelDatabase
 	 *
 	 * @since   1.0
 	 */
-	private function _processRequests($pulls)
+	private function _processRequest($pull)
 	{
-		// Iterate over the incoming pull requests and make sure they are all synchronized with our database.
-		foreach ($pulls as $pull)
+		// Attempt to load the existing pull request based on GitHub ID.
+		$request = new PTRepositoryRequest($this->db);
+		$request->load(array('github_id' => (int) $pull->number));
+
+		// Get the updated timestamps for comparison.
+		$githubUpdated = new JDate($pull->updated_at);
+		$localUpdated = new JDate($request->updated_time);
+
+		// If the updated timestamps are not the same then we need to syncronize the request.
+		if ($githubUpdated != $localUpdated)
 		{
-			// Attempt to load the existing pull request based on GitHub ID.
-			$request = new PTRepositoryRequest($this->db);
-			$request->load(array('github_id' => (int) $pull->number));
+			// Get the full pull request object from GitHub.
+			$pull = $this->github->pulls->get($this->state->get('github.user'), $this->state->get('github.repo'), $pull->number);
 
-			// Get the updated timestamps for comparison.
-			$githubUpdated = new JDate($pull->updated_at);
-			$localUpdated = new JDate($request->updated_time);
+			// Bind the values to our request.
+			$request->github_id = (int) $pull->number;
+			$request->title = $pull->title;
+			$request->state = ($pull->state == 'open' ? 0 : 1);
+			$request->is_mergeable = ($pull->mergeable ? 1 : 0);
+			$request->is_merged = ($pull->merged ? 1 : 0);
+			$request->user = $pull->user->login;
+			$request->avatar_url = $pull->user->avatar_url;
+			$request->created_time = JFactory::getDate($pull->created_at, 'GMT')->toSql();
+			$request->updated_time = JFactory::getDate($pull->updated_at, 'GMT')->toSql();
+			$request->closed_time = JFactory::getDate($pull->closed_at, 'GMT')->toSql();
+			$request->merged_time = JFactory::getDate($pull->merged_at, 'GMT')->toSql();
+			$request->data = $pull;
 
-			// If the updated timestamps are not the same then we need to syncronize the request.
-			if ($githubUpdated != $localUpdated)
+			// Get the milestone foreign key if applicable.
+			if (isset($pull->milestone) && !empty($pull->milestone->number))
 			{
-				// Get the full pull request object from GitHub.
-				$pull = $this->github->pulls->get($this->state->get('github.user'), $this->state->get('github.repo'), $pull->number);
-
-				// Bind the values to our request.
-				$request->github_id = (int) $pull->number;
-				$request->title = $pull->title;
-				$request->state = ($pull->state == 'open' ? 0 : 1);
-				$request->is_mergeable = ($pull->mergeable ? 1 : 0);
-				$request->is_merged = ($pull->merged ? 1 : 0);
-				$request->user = $pull->user->login;
-				$request->avatar_url = $pull->user->avatar_url;
-				$request->created_time = JFactory::getDate($pull->created_at, 'GMT')->toSql();
-				$request->updated_time = JFactory::getDate($pull->updated_at, 'GMT')->toSql();
-				$request->closed_time = JFactory::getDate($pull->closed_at, 'GMT')->toSql();
-				$request->merged_time = JFactory::getDate($pull->merged_at, 'GMT')->toSql();
-				$request->data = $pull;
-
-				// Get the milestone foreign key if applicable.
-				if (isset($pull->milestone) && !empty($pull->milestone->number))
+				// Only look it up once.
+				if (empty($this->_milestoneLookup[(int) $pull->milestone->number]))
 				{
-					// Only look it up once.
-					if (empty($this->_milestoneLookup[(int) $pull->milestone->number]))
-					{
-						$query = $this->db->getQuery(true);
-						$query->select('m.milestone_id')
-							->from('#__milestones AS m')
-							->where('m.github_id = ' . (int) $pull->milestone->number);
-						$this->db->setQuery($query, 0, 1);
-						$milestoneId = $this->db->loadResult();
+					$query = $this->db->getQuery(true);
+					$query->select('m.milestone_id')
+						->from('#__milestones AS m')
+						->where('m.github_id = ' . (int) $pull->milestone->number);
+					$this->db->setQuery($query, 0, 1);
+					$milestoneId = $this->db->loadResult();
 
-						// Add the milestone to the lookup array.
-						$this->_milestoneLookup[(int) $pull->milestone->number] = ($milestoneId ? $milestoneId : null);
-					}
-
-					$request->milestone_id = (int) $this->_milestoneLookup[(int) $pull->milestone->number];
+					// Add the milestone to the lookup array.
+					$this->_milestoneLookup[(int) $pull->milestone->number] = ($milestoneId ? $milestoneId : null);
 				}
 
-				if (!$request->check())
-				{
-					JLog::add(sprintf('Pull request %d did not check out for storage.', $pull->number), JLog::DEBUG);
-				}
+				$request->milestone_id = (int) $this->_milestoneLookup[(int) $pull->milestone->number];
+			}
 
-				try
-				{
-					$request->store();
-				}
-				catch (RuntimeException $e)
-				{
-					JLog::add(sprintf('Pull request %d was unable to be stored.  Error message `%s`.', $pull->number, $e->getMessage()), JLog::DEBUG);
-				}
+			if (!$request->check())
+			{
+				JLog::add(sprintf('Pull request %d did not check out for storage.', $pull->number), JLog::DEBUG);
+			}
+
+			try
+			{
+				$request->store();
+			}
+			catch (RuntimeException $e)
+			{
+				JLog::add(sprintf('Pull request %d was unable to be stored.  Error message `%s`.', $pull->number, $e->getMessage()), JLog::DEBUG);
 			}
 		}
 	}
