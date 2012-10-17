@@ -51,9 +51,6 @@ try
 	// Define the application base path as the current directory.
 	define('JPATH_BASE', __DIR__);
 
-	// Set error handler to echo.
-	JLog::addLogger(array('logger' => 'echo'), JLog::ALL);
-
 	// Instantiate the application.
 	$application = JApplicationWeb::getInstance('PTApplicationWeb');
 	$application->input = new JInputJSON();
