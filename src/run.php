@@ -29,7 +29,7 @@ try
 	JFactory::$application = $application;
 
 	// Execute the application.
-	$application->loadDatabase()->execute();
+	$application->loadLoggers()->loadDatabase()->execute();
 }
 catch (Exception $e)
 {

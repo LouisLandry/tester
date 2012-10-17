@@ -62,6 +62,30 @@ class PTApplicationWeb extends JApplicationWeb
 	}
 
 	/**
+	 * Method to create loggers for the application.
+	 *
+	 * @return  PTApplicationWeb  This object for method chaining.
+	 *
+	 * @since   1.0
+	 */
+	public function loadLoggers()
+	{
+		// Get the loggers from the configuration.
+		$loggers = $this->get('loggers');
+		foreach ($loggers as $logger)
+		{
+			JLog::addLogger(
+				(array) $logger->options,
+				constant(sprintf('%s::%s', 'JLog', $logger->priorities)),
+				$logger->categories,
+				$logger->exclude
+			);
+		}
+
+		return $this;
+	}
+
+	/**
 	 * Execute the application.
 	 *
 	 * @return  void

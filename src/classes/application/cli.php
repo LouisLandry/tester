@@ -25,6 +25,69 @@ class PTApplicationCli extends JApplicationCli
 	protected $db;
 
 	/**
+	 * Method to create a database driver for the application.
+	 *
+	 * @return  PTApplicationCli  This object for method chaining.
+	 *
+	 * @since   1.0
+	 */
+	public function loadDatabase()
+	{
+		// Handle the db_name separately due to a default etc path option.
+		$dbName = $this->get('db_name');
+		if (strpos($dbName, '@etc') === 0)
+		{
+			$dbName = JPATH_CONFIGURATION . substr($dbName, 4);
+		}
+
+		$this->db = JDatabaseDriver::getInstance(
+			array(
+				'driver' => $this->get('db_driver'),
+				'host' => $this->get('db_host'),
+				'user' => $this->get('db_user'),
+				'password' => $this->get('db_pass'),
+				'database' => $dbName,
+				'prefix' => $this->get('db_prefix')
+			)
+		);
+
+		// Select the database.
+		$this->db->select($dbName);
+
+		// Set the debug flag.
+		$this->db->setDebug($this->get('debug'));
+
+		// Set the database to our static cache.
+		JFactory::$database = $this->db;
+
+		return $this;
+	}
+
+	/**
+	 * Method to create loggers for the application.
+	 *
+	 * @return  PTApplicationWeb  This object for method chaining.
+	 *
+	 * @since   1.0
+	 */
+	public function loadLoggers()
+	{
+		// Get the loggers from the configuration.
+		$loggers = $this->get('loggers');
+		foreach ($loggers as $logger)
+		{
+			JLog::addLogger(
+			(array) $logger->options,
+			constant(sprintf('%s::%s', 'JLog', $logger->priorities)),
+			$logger->categories,
+			$logger->exclude
+			);
+		}
+
+		return $this;
+	}
+
+	/**
 	 * Execute the application.
 	 *
 	 * @return  void
@@ -118,44 +181,5 @@ class PTApplicationCli extends JApplicationCli
 		}
 
 		return $config;
-	}
-
-	/**
-	 * Method to create a database driver for the application.
-	 *
-	 * @return  PTApplicationCli  This object for method chaining.
-	 *
-	 * @since   1.0
-	 */
-	public function loadDatabase()
-	{
-		// Handle the db_name separately due to a default etc path option.
-		$dbName = $this->get('db_name');
-		if (strpos($dbName, '@etc') === 0)
-		{
-			$dbName = JPATH_CONFIGURATION . substr($dbName, 4);
-		}
-
-		$this->db = JDatabaseDriver::getInstance(
-			array(
-				'driver' => $this->get('db_driver'),
-				'host' => $this->get('db_host'),
-				'user' => $this->get('db_user'),
-				'password' => $this->get('db_pass'),
-				'database' => $dbName,
-				'prefix' => $this->get('db_prefix')
-			)
-		);
-
-		// Select the database.
-		$this->db->select($dbName);
-
-		// Set the debug flag.
-		$this->db->setDebug($this->get('debug'));
-
-		// Set the database to our static cache.
-		JFactory::$database = $this->db;
-
-		return $this;
 	}
 }

@@ -41,16 +41,52 @@
 		}
 	},
 
-	"phpcs":{
-		"standard": "Joomla",
-		"paths": [
-			"libraries/joomla",
-			"libraries/legacy",
-			"libraries/platform.php",
-			"libraries/loader.php",
-			"libraries/import.php"
-		]
-	},
+	"loggers": [
+		{
+			"options": {
+				"logger": "w3c",
+				"text_file": "github-hook.log",
+				"text_file_path": "/tmp/joomla-tester",
+				"text_file_no_php": true
+			},
+			"priorities": "ALL",
+			"categories": ["github"],
+			"exclude": false
+		},
+		{
+			"options": {
+				"logger": "w3c",
+				"text_file": "github-reopen-comments.log",
+				"text_file_path": "/tmp/joomla-tester",
+				"text_file_no_php": true
+			},
+			"priorities": "ALL",
+			"categories": ["github-comments"],
+			"exclude": false
+		},
+		{
+			"options": {
+				"logger": "w3c",
+				"text_file": "github-pull-request-test.log",
+				"text_file_path": "/tmp/joomla-tester",
+				"text_file_no_php": true
+			},
+			"priorities": "ALL",
+			"categories": ["github-pull-requests"],
+			"exclude": false
+		},
+		{
+			"options": {
+				"logger": "w3c",
+				"text_file": "jenkins-hook.log",
+				"text_file_path": "/tmp/joomla-tester",
+				"text_file_no_php": true
+			},
+			"priorities": "ALL",
+			"categories": ["jenkins"],
+			"exclude": false
+		}
+	],
 
 	"debug":"0",
 	"debug_lang":"0",
