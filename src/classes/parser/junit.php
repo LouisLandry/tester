@@ -30,24 +30,6 @@ class PTParserJunit extends PTParser
 	 */
 	public function parse($report, $file)
 	{
-		// Verify that the report file exists.
-		if (!file_exists($file) || filesize($file) < 1)
-		{
-			throw new RuntimeException('Unit Tests log not found.');
-		}
-
-		// Clean all the paths in the file.
-		file_put_contents($file, $this->cleanPaths(file_get_contents($file)));
-
-		// I'm not sure if this is really necessary, but it appears to validate the full XML document using SimpleXML.
-		libxml_use_internal_errors(true);
-		$xml = simplexml_load_file($file);
-		if (empty($xml))
-		{
-			throw new RuntimeException('Unit Tests log was corrupt.');
-		}
-		unset($xml);
-
 		$reader = new XMLReader;
 		$reader->open($file);
 

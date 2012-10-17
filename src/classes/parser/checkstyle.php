@@ -30,22 +30,13 @@ class PTParserCheckstyle extends PTParser
 	 */
 	public function parse($report, $file)
 	{
-		// Verify that the report file exists.
-		if (!file_exists($file) || filesize($file) < 1)
-		{
-			throw new RuntimeException('Checkstyle analysis not found.');
-		}
-
-		// Clean all the paths in the file.
-		file_put_contents($file, $this->cleanPaths(file_get_contents($file)));
-
 		$reader = new XMLReader;
 		$reader->open($file);
 		while ($reader->read())
 		{
 			if ($reader->name == 'file')
 			{
-				$fName = $reader->getAttribute('name');
+				$fName = $this->cleanPaths($reader->getAttribute('name'));
 			}
 
 			if ($reader->name == 'error')
@@ -55,7 +46,7 @@ class PTParserCheckstyle extends PTParser
 					$e = new stdClass;
 					$e->file = $fName;
 					$e->line = (int) $reader->getAttribute('line');
-					$e->message = $reader->getAttribute('message');
+					$e->message = $this->cleanPaths($reader->getAttribute('message'));
 
 					$report->data->warnings[] = $e;
 				}
@@ -65,7 +56,7 @@ class PTParserCheckstyle extends PTParser
 					$e = new stdClass;
 					$e->file = $fName;
 					$e->line = (int) $reader->getAttribute('line');
-					$e->message = $reader->getAttribute('message');
+					$e->message = $this->cleanPaths($reader->getAttribute('message'));
 
 					$report->data->errors[] = $e;
 				}

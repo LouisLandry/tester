@@ -295,46 +295,36 @@ class PTRepository extends JModelDatabase
 	 *
 	 * @since   1.0
 	 */
-	public function saveRequestTest($request)
+	public function saveRequestTest($jenkinsBuildNumber)
 	{
-		// Initialize variables.
-		$branchName = 'pr-' . $request->github_id;
-		$branchOwner = $request->data->head->repo->owner->login;
-		$branchUrl = $request->data->head->repo->clone_url;
-		$branchRef = $request->data->head->ref;
-		$now = new JDate;
+		// Get the base url for all build related resources.
+		$buildBaseUrl = $this->state->get('jenkins.url') . '/job/' . $this->state->get('jenkins.job') . '/' . $jenkinsBuildNumber;
 
-		// Setup the repository for testing.
-		try
-		{
-			$this->_setupTestingBranch($branchName, $branchOwner, $branchUrl, $branchRef);
-		}
-		catch (RuntimeException $e)
-		{
-			JLog::add(sprintf('Unable to merge pull request %d for testing. Error message was `%s`.', $request->github_id, $e->getMessage()), JLog::DEBUG);
+		// Get the build information from the Jenkins JSON api.
+		$buildData = json_decode(file_get_contents($buildBaseUrl . '/json'));
 
-			// Set the request to 'Not Mergeable'.
-			$row = new PTRepositoryRequest($this->db);
-			$row->load($request->pull_id);
-			$row->is_mergeable = 0;
-			$row->store();
+		// Get some critical values from the test reports.
+		$githubId   = (int) trim(file_get_contents($buildBaseUrl . '/artifact/build/logs/pull-id.txt'));
+		$baseCommit = trim(file_get_contents($buildBaseUrl . '/artifact/build/logs/base-sha1.txt'));
+		$headCommit = trim(file_get_contents($buildBaseUrl . '/artifact/build/logs/head-sha1.txt'));
+		$workspacePath = trim(file_get_contents($buildBaseUrl . '/artifact/build/logs/base-path.txt'));
 
-			// Bring the repository back to it's normal state.
-			$this->_teardownTestingBranch($branchName, $branchOwner, $branchUrl, $branchRef);
-
-			return $this;
-		}
+		// Attempt to load the existing pull request based on GitHub ID.
+		$request = new PTRepositoryRequest($this->db);
+		$request->load(array('github_id' => $githubId));
 
 		// Create the test report object.
 		$test = new PTTestReport($this->db);
 		$test->pull_id = $request->pull_id;
-		$test->tested_time = $now->toSql();
-		$test->head_revision = $request->data->head->sha;
-		$test->base_revision = $request->data->base->sha;
+		$test->tested_time = JFactory::getDate((int) $buildData->timestamp)->toSql();
+		$test->head_revision = $headCommit;
+		$test->base_revision = $baseCommit;
 
 		if (!$test->check())
 		{
-			JLog::add(sprintf('Test for pull request %d did not check out for storage.', $request->github_id), JLog::DEBUG);
+			throw new RuntimeException(
+				sprintf('Test for pull request %d did not check out for storage.', $request->github_id)
+			);
 		}
 
 		try
@@ -343,12 +333,9 @@ class PTRepository extends JModelDatabase
 		}
 		catch (RuntimeException $e)
 		{
-			JLog::add(sprintf('Test for pull request %d was unable to be stored.  Error message `%s`.', $request->github_id, $e->getMessage()), JLog::DEBUG);
-
-			// Bring the repository back to it's normal state.
-			$this->_teardownTestingBranch($branchName, $branchOwner, $branchUrl, $branchRef);
-
-			return $this;
+			throw new RuntimeException(
+				sprintf('Test for pull request %d was unable to be stored.  Error message `%s`.', $request->github_id, $e->getMessage())
+			);
 		}
 
 		// Create the checkstyle report object.
@@ -358,14 +345,20 @@ class PTRepository extends JModelDatabase
 
 		try
 		{
-			$checkstyle = $this->runCheckstyleReport($checkstyle);
+			// Parse the checktyle report.
+			$parser = new PTParserCheckstyle(array($workspacePath));
+			$checkstyle = $parser->parse($checkstyle, $buildBaseUrl . '/artifact/build/logs/checkstyle.xml');
 			$checkstyle = $this->runCheckstyleDiff($checkstyle);
 			$checkstyle->store();
 		}
 		catch (RuntimeException $e)
 		{
 			$test->data->checkstyle = false;
-			JLog::add(sprintf('Test for pull request %d was unable to be stored.  Error message `%s`.', $request->github_id, $e->getMessage()), JLog::DEBUG);
+			JLog::add(
+				sprintf('Checkstyle report for pull request %d was unable to be stored.  Error message `%s`.', $request->github_id, $e->getMessage()),
+				JLog::DEBUG,
+				'error'
+			);
 		}
 
 		$unit = new PTTestReportUnittest($this->db);
@@ -374,30 +367,37 @@ class PTRepository extends JModelDatabase
 
 		try
 		{
-			$unit = $this->runUnitTestReport($unit);
+			$parser = new PTParserJunit(array($workspacePath));
+			$unit = $parser->parse($unit, $buildBaseUrl . '/artifact/build/logs/junit.xml');
 			$unit->store();
 		}
 		catch (RuntimeException $e)
 		{
 			$test->data->unit = false;
-			JLog::add(sprintf('Test for pull request %d was unable to be stored.  Error message `%s`.', $request->github_id, $e->getMessage()), JLog::DEBUG);
+			JLog::add(
+				sprintf('Unit test report for pull request %d was unable to be stored.  Error message `%s`.', $request->github_id, $e->getMessage()),
+				JLog::DEBUG,
+				'error'
+			);
 		}
 
 		try
 		{
-			$unit = $this->runLegacyUnitTestReport($unit);
+			$parser = new PTParserJunit(array($workspacePath));
+			$unit = $parser->parse($unit, $buildBaseUrl . '/artifact/build/logs/junit.legacy.xml');
 			$unit->store();
 		}
 		catch (RuntimeException $e)
 		{
 			$test->data->unit_legacy = false;
-			JLog::add(sprintf('Test for pull request %d was unable to be stored.  Error message `%s`.', $request->github_id, $e->getMessage()), JLog::DEBUG);
+			JLog::add(
+				sprintf('Legacy unit test report for pull request %d was unable to be stored.  Error message `%s`.', $request->github_id, $e->getMessage()),
+				JLog::DEBUG,
+				'error'
+			);
 		}
 
 		$test->store();
-
-		// Bring the repository back to it's normal state.
-		$this->_teardownTestingBranch($branchName, $branchOwner, $branchUrl, $branchRef);
 
 		return $this;
 	}

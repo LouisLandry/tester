@@ -216,10 +216,6 @@ class PTServiceHookCreate extends JControllerBase
 		$repoPath = $this->app->get('repo_path', sys_get_temp_dir());
 		$state->set('repo', $repoPath . '/' . $this->app->get('github.user') . '/' . $this->app->get('github.repo'));
 
-		// Add the PHPCS testing configuration values.
-		$state->set('phpcs.standard', $this->app->get('phpcs.standard'));
-		$state->set('phpcs.paths', $this->app->get('phpcs.paths'));
-
 		// Add the Jenkins configuration values.
 		$state->set('jenkins.url', $this->app->get('jenkins.url'));
 		$state->set('jenkins.job', $this->app->get('jenkins.job'));
