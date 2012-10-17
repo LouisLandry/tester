@@ -134,7 +134,16 @@ class PTServiceHookCreate extends JControllerBase
 			}
 			catch (Exception $e)
 			{
-				// Just let it go.
+				JLog::add(
+					sprintf(
+						'`%s` exception encountered with message `%s` and code `%d`.',
+						get_class($e),
+						$e->getMessage(),
+						(int) $e->getCode()
+					),
+					JLog::ERROR,
+					'error'
+				);
 			}
 		}
 	}
@@ -162,8 +171,24 @@ class PTServiceHookCreate extends JControllerBase
 				'github-pull-requests'
 			);
 
-			$repository->saveRequest($data['pull_request']);
-			$repository->testRequest((int) $data['pull_request']['number']);
+			try
+			{
+				$repository->saveRequest($data['pull_request']);
+				$repository->testRequest((int) $data['pull_request']['number']);
+			}
+			catch (Exception $e)
+			{
+				JLog::add(
+					sprintf(
+						'`%s` exception encountered with message `%s` and code `%d`.',
+						get_class($e),
+						$e->getMessage(),
+						(int) $e->getCode()
+					),
+					JLog::ERROR,
+					'error'
+				);
+			}
 		}
 	}
 

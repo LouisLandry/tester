@@ -1084,9 +1084,9 @@ class PTRepository extends JModelDatabase
 			$request->user = $pull->user->login;
 			$request->avatar_url = $pull->user->avatar_url;
 			$request->created_time = JFactory::getDate($pull->created_at, 'GMT')->toSql();
-			$request->updated_time = JFactory::getDate($pull->updated_at, 'GMT')->toSql();
-			$request->closed_time = JFactory::getDate($pull->closed_at, 'GMT')->toSql();
-			$request->merged_time = JFactory::getDate($pull->merged_at, 'GMT')->toSql();
+			$request->updated_time = ($pull->updated_at ? JFactory::getDate($pull->updated_at, 'GMT')->toSql() : $this->db->getNullDate());
+			$request->closed_time = ($pull->closed_at ? JFactory::getDate($pull->closed_at, 'GMT')->toSql() : $this->db->getNullDate());
+			$request->merged_time = ($pull->merged_at ? JFactory::getDate($pull->merged_at, 'GMT')->toSql() : $this->db->getNullDate());
 			$request->data = $pull;
 
 			// Get the milestone foreign key if applicable.
@@ -1111,7 +1111,9 @@ class PTRepository extends JModelDatabase
 
 			if (!$request->check())
 			{
-				JLog::add(sprintf('Pull request %d did not check out for storage.', $pull->number), JLog::DEBUG);
+				throw new InvalidArgumentException(
+					sprintf('Pull request %d did not check out for storage.', $pull->number)
+				);
 			}
 
 			try
@@ -1120,7 +1122,9 @@ class PTRepository extends JModelDatabase
 			}
 			catch (RuntimeException $e)
 			{
-				JLog::add(sprintf('Pull request %d was unable to be stored.  Error message `%s`.', $pull->number, $e->getMessage()), JLog::DEBUG);
+				throw new RuntimeException(
+					sprintf('Pull request %d was unable to be stored.  Error message `%s`.', $pull->number, $e->getMessage())
+				);
 			}
 		}
 	}

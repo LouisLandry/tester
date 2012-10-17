@@ -19,7 +19,7 @@ PID=`ps -ef | grep ${SCRIPTNAME} | head -n1 |  awk ' {print $2;} '`
 echo ${PID} > ${PIDFILE}
 
 ## Run the script.
-/usr/local/joomla/tester/src/run.php update
+/usr/local/joomla/tester/src/run.php update -f
 
 if [ -f ${PIDFILE} ]; then
     rm ${PIDFILE}
