@@ -287,26 +287,6 @@ class PTRepository extends JModelDatabase
 	}
 
 	/**
-	 * Save a pull request.
-	 *
-	 * @param   object  $pull
-	 *
-	 * @return  void
-	 *
-	 * @since   1.0
-	 * @throws  InvalidArgumentException
-	 */
-	public function saveRequest($pull)
-	{
-		if (!isset($pull->number) || !isset($pull->mergeable) || !isset($pull->merged))
-		{
-			throw new InvalidArgumentException('Unable to save the poorly formed pull request.');
-		}
-
-		$this->_processRequest($pull);
-	}
-
-	/**
 	 * Test an array of pull requests.
 	 *
 	 * @param   object  $request  The requests to test.
@@ -460,6 +440,24 @@ class PTRepository extends JModelDatabase
 			$page++;
 			$milestones = $this->github->milestones->getList($this->state->get('github.user'), $this->state->get('github.repo'), 'open', 'due_at', 'desc', $page, 100);
 		}
+	}
+
+	/**
+	 * Synchronize a pull request with GitHub.
+	 *
+	 * @param   integer  $githubId  The GitHub pull request id number.
+	 *
+	 * @return  void
+	 *
+	 * @since   1.0
+	 * @throws  InvalidArgumentException
+	 */
+	public function syncRequest($githubId)
+	{
+		// Get the full pull request object from GitHub.
+		$pull = $this->github->pulls->get($this->state->get('github.user'), $this->state->get('github.repo'), $githubId);
+
+		$this->_processRequest($pull);
 	}
 
 	/**

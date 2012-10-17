@@ -173,7 +173,7 @@ class PTServiceHookCreate extends JControllerBase
 
 			try
 			{
-				$repository->saveRequest($data['pull_request']);
+				$repository->syncRequest((int) $data['pull_request']['number']);
 				$repository->testRequest((int) $data['pull_request']['number']);
 			}
 			catch (Exception $e)
