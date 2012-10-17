@@ -247,8 +247,8 @@ class PTRepository extends JModelDatabase
 		if (!$isMerged)
 		{
 			$this->github->pulls->edit(
-				$this->app->get('github.user'),
-				$this->app->get('github.repo'),
+				$this->state->get('github.user'),
+				$this->state->get('github.repo'),
 				$githubId,
 				null, null,
 				'open'
