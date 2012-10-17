@@ -301,7 +301,7 @@ class PTRepository extends JModelDatabase
 		$buildBaseUrl = $this->state->get('jenkins.url') . '/job/' . $this->state->get('jenkins.job') . '/' . $jenkinsBuildNumber;
 
 		// Get the build information from the Jenkins JSON api.
-		$buildData = json_decode(file_get_contents($buildBaseUrl . '/json'));
+		$buildData = json_decode(file_get_contents($buildBaseUrl . '/api/json'));
 
 		// Get some critical values from the test reports.
 		$githubId   = (int) trim(file_get_contents($buildBaseUrl . '/artifact/build/logs/pull-id.txt'));
