@@ -1,5 +1,5 @@
 ##
-# @version $Id$
+# @package   Joomla.Tester
 # @copyright (C) 2012 Open Source Matters, Inc.  All Rights Reserved.
 ##
 
