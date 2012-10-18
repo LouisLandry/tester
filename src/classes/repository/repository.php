@@ -64,44 +64,6 @@ class PTRepository extends JModelDatabase
 		$this->repo = new PTGitRepository($this->state->get('repo'));
 	}
 
-	/**
-	 * Test the master branch and update the database.
-	 *
-	 * @return  void
-	 *
-	 * @since   1.0
-	 */
-	public function clean()
-	{
-		// Get the repository object from the database.
-		$query = $this->db->getQuery(true);
-		$query->select('report_id')
-		->from('#__pull_request_test_unit_test_reports')
-		->where('(error_count > 0 OR failure_count > 0)');
-		$this->db->setQuery($query);
-
-		$list = $this->db->loadColumn();
-		foreach ($list as $report)
-		{
-			$unit = new PTTestReportUnittest($this->db);
-			$unit->load($report);
-
-			foreach ($unit->data->errors as $i => $error)
-			{
-				$error->message = str_replace("<br />", "\n", $error->message);
-				$unit->data->errors[$i] = $error;
-			}
-
-			foreach ($unit->data->failures as $i => $failure)
-			{
-				$failure->message = str_replace("<br />", "\n", $failure->message);
-				$unit->data->failures[$i] = $failure;
-			}
-
-			$unit->store();
-		}
-	}
-
 	public function cleanReleases()
 	{
 		$changedRequests = 0;
@@ -778,76 +740,6 @@ class PTRepository extends JModelDatabase
 	}
 
 	/**
-	 * Execute PHPUnit over the repository.
-	 *
-	 * @param   PTTestReportUnittest  $report  The report object to populate.
-	 *
-	 * @return  PTTestReportUnittest
-	 *
-	 * @since   1.0
-	 */
-	protected function runUnitTestReport(PTTestReportUnittest $report)
-	{
-		// Initialize variables.
-		$out = array();
-		$return = null;
-
-		// Execute the command.
-		$wd = getcwd();
-		chdir($this->state->get('repo'));
-		$cleanPath = getcwd();
-		exec('ant clean phpunit', $out, $return);
-		chdir($wd);
-
-		// Validate the response.
-		if ($return !== 0)
-		{
-			throw new RuntimeException(sprintf('PHPUnit failed to execute with code %d and message %s.', $return, implode("\n", $out)));
-		}
-
-		// Parse the checktyle report.
-		$parser = new PTParserJunit(array($cleanPath, '/private/' . $this->state->get('repo'), $this->state->get('repo')));
-		$report = $parser->parse($report, $this->state->get('repo') . '/build/logs/junit.xml');
-
-		return $report;
-	}
-
-	/**
-	 * Execute PHPUnit over the repository.
-	 *
-	 * @param   PTTestReportUnittest  $report  The report object to populate.
-	 *
-	 * @return  PTTestReportUnittest
-	 *
-	 * @since   1.0
-	 */
-	protected function runLegacyUnitTestReport(PTTestReportUnittest $report)
-	{
-		// Initialize variables.
-		$out = array();
-		$return = null;
-
-		// Execute the command.
-		$wd = getcwd();
-		chdir($this->state->get('repo'));
-		$cleanPath = getcwd();
-		exec('ant clean phpunit-legacy', $out, $return);
-		chdir($wd);
-
-		// Validate the response.
-		if ($return !== 0)
-		{
-			throw new RuntimeException(sprintf('PHPUnit Legacy failed to execute with code %d and message %s.', $return, implode("\n", $out)));
-		}
-
-		// Parse the checktyle report.
-		$parser = new PTParserJunit(array($cleanPath, '/private/' . $this->state->get('repo'), $this->state->get('repo')));
-		$report = $parser->parse($report, $this->state->get('repo') . '/build/logs/junit.legacy.xml');
-
-		return $report;
-	}
-
-	/**
 	 * Get a list of closed, and the current active release objects.  The objects have a milestone_id, github_id, due_time
 	 * and start_time properties.  The release cycle can be inferred from the time span between start and due time values.
 	 *
@@ -1211,61 +1103,5 @@ class PTRepository extends JModelDatabase
 		}
 
 		return $query;
-	}
-
-	/**
-	 * Setup the repository branch to allow testing.
-	 *
-	 * @param   string  $branchName   The name to use for the branch.
-	 * @param   string  $branchOwner  The GitHub account login for the owner of the branch to test.
-	 * @param   string  $branchUrl    The git repository fork URL.
-	 * @param   string  $branchRef    The git repository ref to test.
-	 *
-	 * @return  void
-	 *
-	 * @since   1.0
-	 * @throws  RuntimeException
-	 */
-	private function _setupTestingBranch($branchName, $branchOwner, $branchUrl, $branchRef)
-	{
-		// Reset the repository to the main staging branch.
-		$this->resetToStaging();
-
-		// Add the remote if it doesn't exist.
-		if (!$this->repo->remoteExists($branchOwner))
-		{
-			$this->repo->remoteAdd($branchOwner, $branchUrl);
-		}
-		$this->repo->fetch($branchOwner);
-
-		// Create the testing branch and merge in the changes.
-		if (!$this->repo->branchExists($branchName))
-		{
-			$this->repo->branchCreate($branchName, 'staging', 'origin');
-		}
-		$this->repo->branchCheckout($branchName);
-		$this->repo->merge($branchOwner . '/' . $branchRef);
-	}
-
-	/**
-	 * Put the repository back in order after testing and remove the testing branch.
-	 *
-	 * @param   string  $branchName   The name to use for the branch.
-	 * @param   string  $branchOwner  The GitHub account login for the owner of the branch to test.
-	 * @param   string  $branchUrl    The git repository fork URL.
-	 * @param   string  $branchRef    The git repository ref to test.
-	 *
-	 * @return  void
-	 *
-	 * @since   1.0
-	 * @throws  RuntimeException
-	 */
-	private function _teardownTestingBranch($branchName, $branchOwner, $branchUrl, $branchRef)
-	{
-		// Bring the repository back to it's normal state.
-		$this->repo->clean();
-		$this->repo->branchCheckout('master');
-		$this->repo->branchRemove($branchName);
-		$this->repo->clean();
 	}
 }
