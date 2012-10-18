@@ -316,7 +316,7 @@ class PTRepository extends JModelDatabase
 		// Create the test report object.
 		$test = new PTTestReport($this->db);
 		$test->pull_id = $request->pull_id;
-		$test->tested_time = JFactory::getDate((int) $buildData->timestamp)->toSql();
+		$test->tested_time = JFactory::getDate((int) $buildData->timestamp / 1000)->toSql();
 		$test->head_revision = $headCommit;
 		$test->base_revision = $baseCommit;
 
