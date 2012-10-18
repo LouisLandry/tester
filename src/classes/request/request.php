@@ -1,50 +1,36 @@
 <?php
 /**
  * @package     Joomla.Tester
- * @subpackage  Repository
+ * @subpackage  Request
  *
  * @copyright   Copyright (C) 2011 Open Source Matters, Inc. All rights reserved.
  * @license     GNU General Public License version 2 or later; see LICENSE
  */
 
 /**
- * CRUD class for repository Pull Requests.
+ * Pull Request class for the Joomla Tester.
+ *
+ * @property-read  integer  $pull_id
+ * @property-read  integer  $github_id
+ * @property-read  integer  $milestone_id
+ * @property-read  string   $title
+ * @property-read  integer  $state
+ * @property-read  integer  $is_mergeable
+ * @property-read  integer  $is_merged
+ * @property-read  string   $user
+ * @property-read  string   $avatar_url
+ * @property-read  JDate    $created_time
+ * @property-read  JDate    $updated_time
+ * @property-read  JDate    $closed_time
+ * @property-read  JDate    $merged_time
+ * @property-read  object   $data
  *
  * @package     Joomla.Tester
- * @subpackage  Repository
+ * @subpackage  Request
  * @since       1.0
  */
-class PTRepositoryRequest extends JTable
+class PTRequest extends JTable
 {
-
-	public $pull_id;
-
-	public $github_id;
-
-	public $milestone_id;
-
-	public $title;
-
-	public $state;
-
-	public $is_mergeable;
-
-	public $is_merged;
-
-	public $user;
-
-	public $avatar_url;
-
-	public $created_time;
-
-	public $updated_time;
-
-	public $closed_time;
-
-	public $merged_time;
-
-	public $data;
-
 	/**
 	 * Constructor
 	 *
@@ -56,13 +42,13 @@ class PTRepositoryRequest extends JTable
 	{
 		parent::__construct('#__pull_requests', 'pull_id', $db);
 
-		$this->data = (object) array();
+		$this->data = new stdClass;
 	}
 
 	/**
 	 * Overloaded check function
 	 *
-	 * @return  boolean  True if the object is ok
+	 * @return  boolean  True if the object is ok to store.
 	 *
 	 * @see     JTable::check
 	 * @since   1.0
@@ -73,6 +59,7 @@ class PTRepositoryRequest extends JTable
 		{
 			return false;
 		}
+
 		return true;
 	}
 
@@ -81,7 +68,7 @@ class PTRepositoryRequest extends JTable
 	 *
 	 * @param   mixed  $src     Named array
 	 * @param   mixed  $ignore  An optional array or space separated list of properties
-	 * to ignore while binding.
+	 *                          to ignore while binding.
 	 *
 	 * @return  mixed  Null if operation was satisfactory, otherwise returns an error
 	 *

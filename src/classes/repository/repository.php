@@ -310,7 +310,7 @@ class PTRepository extends JModelDatabase
 		$workspacePath = trim(file_get_contents($buildBaseUrl . '/artifact/build/logs/base-path.txt'));
 
 		// Attempt to load the existing pull request based on GitHub ID.
-		$request = new PTRepositoryRequest($this->db);
+		$request = new PTRequest($this->db);
 		$request->load(array('github_id' => $githubId));
 
 		// Create the test report object.
@@ -1021,7 +1021,7 @@ class PTRepository extends JModelDatabase
 		foreach ($milestones as $milestone)
 		{
 			// Attempt to load the existing milestone based on GitHub ID.
-			$request = new PTRepositoryMilestone($this->db);
+			$request = new PTMilestone($this->db);
 			$request->load(array('github_id' => (int) $milestone->number));
 
 			// Bind the values to our request.
@@ -1060,7 +1060,7 @@ class PTRepository extends JModelDatabase
 	private function _processRequest($pull)
 	{
 		// Attempt to load the existing pull request based on GitHub ID.
-		$request = new PTRepositoryRequest($this->db);
+		$request = new PTRequest($this->db);
 		$request->load(array('github_id' => (int) $pull->number));
 
 		// Get the updated timestamps for comparison.

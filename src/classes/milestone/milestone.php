@@ -1,36 +1,29 @@
 <?php
 /**
  * @package     Joomla.Tester
- * @subpackage  Repository
+ * @subpackage  Milestone
  *
  * @copyright   Copyright (C) 2011 Open Source Matters, Inc. All rights reserved.
  * @license     GNU General Public License version 2 or later; see LICENSE
  */
 
 /**
- * CRUD class for repository milestones.
+ * Milestone class for the Joomla Tester.
+ *
+ * @property-read  integer  $milestone_id
+ * @property-read  integer  $github_id
+ * @property-read  string   $title
+ * @property-read  integer  $state
+ * @property-read  JDate    $created_time
+ * @property-read  JDate    $due_time
+ * @property-read  object   $data
  *
  * @package     Joomla.Tester
- * @subpackage  Repository
+ * @subpackage  Milestone
  * @since       1.0
  */
-class PTRepositoryMilestone extends JTable
+class PTMilestone extends JTable
 {
-
-	public $milestone_id;
-
-	public $github_id;
-
-	public $title;
-
-	public $state;
-
-	public $created_time;
-
-	public $due_time;
-
-	public $data;
-
 	/**
 	 * Constructor
 	 *
@@ -42,13 +35,13 @@ class PTRepositoryMilestone extends JTable
 	{
 		parent::__construct('#__milestones', 'milestone_id', $db);
 
-		$this->data = (object) array();
+		$this->data = new stdClass;
 	}
 
 	/**
 	 * Overloaded check function
 	 *
-	 * @return  boolean  True if the object is ok
+	 * @return  boolean  True if the object is ok to store.
 	 *
 	 * @see     JTable::check
 	 * @since   1.0
@@ -59,6 +52,7 @@ class PTRepositoryMilestone extends JTable
 		{
 			return false;
 		}
+
 		return true;
 	}
 
@@ -67,7 +61,7 @@ class PTRepositoryMilestone extends JTable
 	 *
 	 * @param   mixed  $src     Named array
 	 * @param   mixed  $ignore  An optional array or space separated list of properties
-	 * to ignore while binding.
+	 *                          to ignore while binding.
 	 *
 	 * @return  mixed  Null if operation was satisfactory, otherwise returns an error
 	 *
