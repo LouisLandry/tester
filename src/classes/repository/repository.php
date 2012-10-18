@@ -276,7 +276,7 @@ class PTRepository extends JModelDatabase
 		$request->load(array('github_id' => $githubId));
 
 		// Create the test report object.
-		$test = new PTTestReport($this->db);
+		$test = new PTRequestTest($this->db);
 		$test->pull_id = $request->pull_id;
 		$test->tested_time = JFactory::getDate((int) $buildData->timestamp / 1000)->toSql();
 		$test->head_revision = $headCommit;
@@ -301,7 +301,7 @@ class PTRepository extends JModelDatabase
 		}
 
 		// Create the checkstyle report object.
-		$checkstyle = new PTTestReportCheckstyle($this->db);
+		$checkstyle = new PTRequestTestCheckstyle($this->db);
 		$checkstyle->pull_id = $test->pull_id;
 		$checkstyle->test_id = $test->test_id;
 
@@ -323,7 +323,7 @@ class PTRepository extends JModelDatabase
 			);
 		}
 
-		$unit = new PTTestReportUnittest($this->db);
+		$unit = new PTRequestTestUnittest($this->db);
 		$unit->pull_id = $test->pull_id;
 		$unit->test_id = $test->test_id;
 
@@ -525,7 +525,7 @@ class PTRepository extends JModelDatabase
 		$repository->updated_time = $now->toSql();
 
 		// Create the checkstyle report object.
-		$checkstyle = new PTTestReportCheckstyle($this->db);
+		$checkstyle = new PTRequestTestCheckstyle($this->db);
 
 		try
 		{
@@ -652,13 +652,13 @@ class PTRepository extends JModelDatabase
 	/**
 	 * Execute PHP_CodeSniffer over the repository.
 	 *
-	 * @param   PTTestReportCheckstyle  $report  The report object to populate.
+	 * @param   PTRequestTestCheckstyle  $report  The report object to populate.
 	 *
-	 * @return  PTTestReportCheckstyle
+	 * @return  PTRequestTestCheckstyle
 	 *
 	 * @since   1.0
 	 */
-	protected function runCheckstyleDiff(PTTestReportCheckstyle $report)
+	protected function runCheckstyleDiff(PTRequestTestCheckstyle $report)
 	{
 		$repository = $this->_fetchRepositoryObject();
 
@@ -707,13 +707,13 @@ class PTRepository extends JModelDatabase
 	/**
 	 * Execute PHP_CodeSniffer over the repository.
 	 *
-	 * @param   PTTestReportCheckstyle  $report  The report object to populate.
+	 * @param   PTRequestTestCheckstyle  $report  The report object to populate.
 	 *
-	 * @return  PTTestReportCheckstyle
+	 * @return  PTRequestTestCheckstyle
 	 *
 	 * @since   1.0
 	 */
-	protected function runCheckstyleReport(PTTestReportCheckstyle $report)
+	protected function runCheckstyleReport(PTRequestTestCheckstyle $report)
 	{
 		// Initialize variables.
 		$out = array();

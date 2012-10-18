@@ -1,36 +1,29 @@
 <?php
 /**
  * @package     Joomla.Tester
- * @subpackage  Test
+ * @subpackage  Request
  *
  * @copyright   Copyright (C) 2012 Open Source Matters, Inc. All rights reserved.
  * @license     GNU General Public License version 2 or later; see LICENSE
  */
 
 /**
-* CRUD class for pull request test reports.
+ * Pull Request Test class for the Joomla Tester.
+ *
+ * @property-read  integer  $test_id
+ * @property-read  integer  $pull_id
+ * @property-read  integer  $revision
+ * @property-read  JDate    $tested_time
+ * @property-read  string   $head_revision
+ * @property-read  string   $base_revision
+ * @property-read  object   $data
  *
  * @package     Joomla.Tester
- * @subpackage  Test
+ * @subpackage  Request
  * @since       1.0
  */
-class PTTestReport extends JTable
+class PTRequestTest extends JTable
 {
-
-	public $test_id;
-
-	public $pull_id;
-
-	public $revision;
-
-	public $tested_time;
-
-	public $head_revision;
-
-	public $base_revision;
-
-	public $data;
-
 	/**
 	 * Constructor
 	 *
@@ -42,13 +35,13 @@ class PTTestReport extends JTable
 	{
 		parent::__construct('#__pull_request_tests', 'test_id', $db);
 
-		$this->data = (object) array();
+		$this->data = new stdClass;
 	}
 
 	/**
 	 * Overloaded check function
 	 *
-	 * @return  boolean  True if the object is ok
+	 * @return  boolean  True if the object is ok to store.
 	 *
 	 * @see     JTable::check
 	 * @since   1.0
@@ -59,6 +52,7 @@ class PTTestReport extends JTable
 		{
 			return false;
 		}
+
 		return true;
 	}
 
@@ -67,7 +61,7 @@ class PTTestReport extends JTable
 	 *
 	 * @param   mixed  $src     Named array
 	 * @param   mixed  $ignore  An optional array or space separated list of properties
-	 * to ignore while binding.
+	 *                          to ignore while binding.
 	 *
 	 * @return  mixed  Null if operation was satisfactory, otherwise returns an error
 	 *

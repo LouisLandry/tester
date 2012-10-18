@@ -19,10 +19,10 @@ class PTParserJunit extends PTParser
 	/**
 	 * Parse a JUnit XML report into a value object.
 	 *
-	 * @param   PTTestReportUnittest  $report  The report on which to bind parsed data.
+	 * @param   PTRequestTestUnittest  $report  The report on which to bind parsed data.
 	 * @param   string                $file    The filesystem path of the JUnit report to parse.
 	 *
-	 * @return  PTTestReportUnittest
+	 * @return  PTRequestTestUnittest
 	 *
 	 * @see     PTParser::parse()
 	 * @since   1.0

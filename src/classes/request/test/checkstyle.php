@@ -1,38 +1,27 @@
 <?php
 /**
  * @package     Joomla.Tester
- * @subpackage  Test
+ * @subpackage  Request
  *
  * @copyright   Copyright (C) 2012 Open Source Matters, Inc. All rights reserved.
  * @license     GNU General Public License version 2 or later; see LICENSE
  */
 
 /**
-* CRUD class for pull request test unit test reports.
+ * Pull Request Checkstyle Report class for the Joomla Tester.
+ *
+ * @property-read  integer  $test_id
+ * @property-read  integer  $pull_id
+ * @property-read  integer  $error_count
+ * @property-read  integer  $warning_count
+ * @property-read  object   $data
  *
  * @package     Joomla.Tester
- * @subpackage  Test
+ * @subpackage  Request
  * @since       1.0
  */
-class PTTestReportUnittest extends JTable
+class PTRequestTestCheckstyle extends JTable
 {
-
-	public $pull_id;
-
-	public $test_id;
-
-	public $error_count;
-
-	public $test_count;
-
-	public $assertion_count;
-
-	public $failure_count;
-
-	public $elapsed_time;
-
-	public $data;
-
 	/**
 	 * Constructor
 	 *
@@ -42,15 +31,15 @@ class PTTestReportUnittest extends JTable
 	 */
 	public function __construct($db)
 	{
-		parent::__construct('#__pull_request_test_unit_test_reports', 'report_id', $db);
+		parent::__construct('#__pull_request_test_checkstyle_reports', 'report_id', $db);
 
-		$this->data = (object) array('errors' => array(), 'failures' => array());
+		$this->data = (object) array('errors' => array(), 'warnings' => array());
 	}
 
 	/**
 	 * Overloaded check function
 	 *
-	 * @return  boolean  True if the object is ok
+	 * @return  boolean  True if the object is ok to store.
 	 *
 	 * @see     JTable::check
 	 * @since   1.0
@@ -61,6 +50,7 @@ class PTTestReportUnittest extends JTable
 		{
 			return false;
 		}
+
 		return true;
 	}
 
@@ -69,7 +59,7 @@ class PTTestReportUnittest extends JTable
 	 *
 	 * @param   mixed  $src     Named array
 	 * @param   mixed  $ignore  An optional array or space separated list of properties
-	 * to ignore while binding.
+	 *                          to ignore while binding.
 	 *
 	 * @return  mixed  Null if operation was satisfactory, otherwise returns an error
 	 *
@@ -141,7 +131,6 @@ class PTTestReportUnittest extends JTable
 
 		return $success;
 	}
-
 	/**
 	 * Overrides JTable::store to check unique fields.
 	 *

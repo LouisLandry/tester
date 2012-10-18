@@ -19,10 +19,10 @@ class PTParserCheckstyle extends PTParser
 	/**
 	 * Parse a Checkstyle XML report into a value object.
 	 *
-	 * @param   PTTestReportCheckstyle  $report  The report on which to bind parsed data.
+	 * @param   PTRequestTestCheckstyle  $report  The report on which to bind parsed data.
 	 * @param   string                  $file    The filesystem path of the checkstyle report to parse.
 	 *
-	 * @return  PTTestReportCheckstyle
+	 * @return  PTRequestTestCheckstyle
 	 *
 	 * @see     PTParser::parse()
 	 * @since   1.0
