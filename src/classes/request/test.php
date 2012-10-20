@@ -25,6 +25,12 @@
 class PTRequestTest extends JTable
 {
 	/**
+	 * @var    object  The repository database row object.
+	 * @since  1.0
+	 */
+	private $_repository;
+
+	/**
 	 * Constructor
 	 *
 	 * @param   JDatabaseDriver  $db  Database driver object.
@@ -170,6 +176,136 @@ class PTRequestTest extends JTable
 	}
 
 	/**
+	 * Process and store the data from a Jenkins build.
+	 *
+	 * @param   integer  $jenkinsBuildNumber  The Jenkins build number to parse and store.
+	 *
+	 * @return  void
+	 *
+	 * @since   1.0
+	 */
+	public function processJenkinsBuild($jenkinsBuildNumber)
+	{
+		$app = JFactory::getApplication();
+
+		// Get the base url for all build related resources.
+		$buildBaseUrl = $app->get('jenkins.url') . '/job/' . $app->get('jenkins.job') . '/' . $jenkinsBuildNumber;
+
+		// Get the build information from the Jenkins JSON api.
+		$buildData = json_decode(file_get_contents($buildBaseUrl . '/api/json'));
+
+		// Get some critical values from the test reports.
+		$githubId   = (int) trim(file_get_contents($buildBaseUrl . '/artifact/build/logs/pull-id.txt'));
+		$baseCommit = trim(file_get_contents($buildBaseUrl . '/artifact/build/logs/base-sha1.txt'));
+		$headCommit = trim(file_get_contents($buildBaseUrl . '/artifact/build/logs/head-sha1.txt'));
+		$workspacePath = trim(file_get_contents($buildBaseUrl . '/artifact/build/logs/base-path.txt'));
+
+		// Attempt to load the existing pull request based on GitHub ID.
+		$request = new PTRequest($this->_db);
+		$request->load(array('github_id' => $githubId));
+
+		// Create the test report object.
+		$this->pull_id = $request->pull_id;
+		$this->tested_time = JFactory::getDate((int) $buildData->timestamp / 1000)->toSql();
+		$this->head_revision = $headCommit;
+		$this->base_revision = $baseCommit;
+		$this->build_number = (int) $jenkinsBuildNumber;
+
+		if (!$this->check())
+		{
+			throw new RuntimeException(
+				sprintf('Test for pull request %d did not check out for storage.', $request->github_id)
+			);
+		}
+
+		try
+		{
+			$this->store();
+		}
+		catch (RuntimeException $e)
+		{
+			throw new RuntimeException(
+				sprintf('Test for pull request %d was unable to be stored.  Error message `%s`.', $request->github_id, $e->getMessage())
+			);
+		}
+
+		// Create the checkstyle report object.
+		$checkstyle = new PTRequestTestCheckstyle($this->_db);
+		$checkstyle->pull_id = $this->pull_id;
+		$checkstyle->test_id = $this->test_id;
+
+		try
+		{
+			// Parse the checktyle report.
+			$parser = new PTParserCheckstyle(array($workspacePath));
+			$checkstyle = $parser->parse($checkstyle, $buildBaseUrl . '/artifact/build/logs/checkstyle.xml');
+			$checkstyle = $this->runCheckstyleDiff($checkstyle);
+			$checkstyle->store();
+		}
+		catch (RuntimeException $e)
+		{
+			$this->data->checkstyle = false;
+			JLog::add(
+				sprintf(
+					'Checkstyle report for pull request %d was unable to be stored.  Error message `%s`.',
+					$request->github_id,
+					$e->getMessage()
+				),
+				JLog::DEBUG,
+				'error'
+			);
+		}
+
+		$unit = new PTRequestTestUnittest($this->_db);
+		$unit->pull_id = $this->pull_id;
+		$unit->test_id = $this->test_id;
+
+		try
+		{
+			$parser = new PTParserJunit(array($workspacePath));
+			$unit = $parser->parse($unit, $buildBaseUrl . '/artifact/build/logs/junit.xml');
+			$unit->store();
+		}
+		catch (RuntimeException $e)
+		{
+			$this->data->unit = false;
+			JLog::add(
+				sprintf(
+					'Unit test report for pull request %d was unable to be stored.  Error message `%s`.',
+					$request->github_id,
+					$e->getMessage()
+				),
+				JLog::DEBUG,
+				'error'
+			);
+		}
+
+		try
+		{
+			$parser = new PTParserJunit(array($workspacePath));
+			$unit = $parser->parse($unit, $buildBaseUrl . '/artifact/build/logs/junit.legacy.xml');
+			$unit->store();
+		}
+		catch (RuntimeException $e)
+		{
+			$this->data->unit_legacy = false;
+			JLog::add(
+				sprintf(
+					'Legacy unit test report for pull request %d was unable to be stored.  Error message `%s`.',
+					$request->github_id,
+					$e->getMessage()
+				),
+				JLog::DEBUG,
+				'error'
+			);
+		}
+
+		$this->store();
+
+		return $this;
+	}
+
+	/**
 	 * Get the next test revision for the pull request.
 	 *
 	 * @return  integer
@@ -192,5 +328,102 @@ class PTRequestTest extends JTable
 		$this->_db->setQuery($query);
 
 		return (1 + (int) $this->_db->loadResult());
+	}
+
+	/**
+	 * Execute PHP_CodeSniffer over the repository.
+	 *
+	 * @param   PTRequestTestCheckstyle  $report  The report object to populate.
+	 *
+	 * @return  PTRequestTestCheckstyle
+	 *
+	 * @since   1.0
+	 */
+	protected function runCheckstyleDiff(PTRequestTestCheckstyle $report)
+	{
+		$repository = $this->_fetchRepositoryObject();
+
+		$localErrors = (array) $repository->data->checkstyle->errors;
+		$localWarnings = (array) $repository->data->checkstyle->warnings;
+
+		if (isset($report->data->errors))
+		{
+			$pullErrors = $report->data->errors;
+			foreach ($pullErrors as $k => $v)
+			{
+				foreach ($localErrors as $error)
+				{
+					if ($v->file == $error->file && $v->line == $error->line)
+					{
+						unset($pullErrors[$k]);
+						break;
+					}
+				}
+			}
+			$report->data->new_errors = array_values($pullErrors);
+			$report->error_count = count($report->data->new_errors);
+		}
+
+		if (isset($report->data->warnings))
+		{
+			$pullWarnings = $report->data->warnings;
+			foreach ($pullWarnings as $k => $v)
+			{
+				foreach ($localWarnings as $warning)
+				{
+					if ($v->file == $warning->file && $v->line == $warning->line)
+					{
+						unset($pullWarnings[$k]);
+						break;
+					}
+				}
+			}
+			$report->data->new_warnings = array_values($pullWarnings);
+			$report->warning_count = count($report->data->new_warnings);
+		}
+
+		return $report;
+	}
+
+	/**
+	 * Get the repository object from the database.
+	 *
+	 * @return  object
+	 *
+	 * @since   1.0
+	 */
+	private function _fetchRepositoryObject()
+	{
+		if (!empty($this->_repository))
+		{
+			return $this->_repository;
+		}
+
+		// Get the repository object from the database.
+		$query = $this->_db->getQuery(true);
+		$query->select('*')
+			->from('#__repositories')
+			->where('repository_id = 1');
+		$this->_db->setQuery($query, 0, 1);
+
+		$this->_repository = $this->_db->loadObject();
+
+		// Ensure we have a solid footing for our data object.
+		$this->_repository->data = json_decode($this->_repository->data);
+		if (is_scalar($this->_repository->data))
+		{
+			$this->_repository->data = new stdClass;
+		}
+		elseif (is_array($this->_repository->data))
+		{
+			$this->_repository->data = (object) $this->_repository->data;
+		}
+
+		if (!isset($this->_repository->data->checkstyle))
+		{
+			$this->_repository->data->checkstyle = new stdClass;
+		}
+
+		return $this->_repository;
 	}
 }

@@ -36,12 +36,6 @@ class PTServiceJenkinsNotificationCreate extends JControllerBase
 	 */
 	public function execute()
 	{
-		// Create the model state object.
-		$state = $this->_buildModelState();
-
-		// Get the repository model.
-		$repository = new PTRepository($state);
-
 		// Grab data from the end point.
 		$data = $this->input->getArray(
 			array(
@@ -66,7 +60,8 @@ class PTServiceJenkinsNotificationCreate extends JControllerBase
 		{
 			try
 			{
-				$repository->saveRequestTest($data['build']['number']);
+				$test = new PTRequestTest(JFactory::$database);
+				$test->processJenkinsBuild($data['build']['number']);
 			}
 			catch (Exception $e)
 			{
@@ -82,38 +77,6 @@ class PTServiceJenkinsNotificationCreate extends JControllerBase
 				);
 			}
 		}
-	}
-
-	/**
-	 * Build and return a model state object.
-	 *
-	 * @return  JRegistry
-	 *
-	 * @since   1.0
-	 */
-	private function _buildModelState()
-	{
-		// Create the model state object.
-		$state = new JRegistry;
-
-		// Add the GitHub configuration values.
-		$state->set('github.api', $this->app->get('github.api.url'));
-		$state->set('github.username', $this->app->get('github.api.username'));
-		$state->set('github.password', $this->app->get('github.api.password'));
-		$state->set('github.host', $this->app->get('github.host'));
-		$state->set('github.user', $this->app->get('github.user'));
-		$state->set('github.repo', $this->app->get('github.repo'));
-
-		// Build the repository path.
-		$repoPath = $this->app->get('repo_path', sys_get_temp_dir());
-		$state->set('repo', $repoPath . '/' . $this->app->get('github.user') . '/' . $this->app->get('github.repo'));
-
-		// Add the Jenkins configuration values.
-		$state->set('jenkins.url', $this->app->get('jenkins.url'));
-		$state->set('jenkins.job', $this->app->get('jenkins.job'));
-		$state->set('jenkins.token', $this->app->get('jenkins.token'));
-
-		return $state;
 	}
 
 	/**

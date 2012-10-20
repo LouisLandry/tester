@@ -20,7 +20,7 @@ class PTParserJunit extends PTParser
 	 * Parse a JUnit XML report into a value object.
 	 *
 	 * @param   PTRequestTestUnittest  $report  The report on which to bind parsed data.
-	 * @param   string                $file    The filesystem path of the JUnit report to parse.
+	 * @param   string                 $file    The filesystem path of the JUnit report to parse.
 	 *
 	 * @return  PTRequestTestUnittest
 	 *
@@ -31,9 +31,20 @@ class PTParserJunit extends PTParser
 	public function parse($report, $file)
 	{
 		$reader = new XMLReader;
-		$reader->open($file);
 
-		while ($reader->read() && $reader->name !== 'testsuite');
+		if (@!$reader->open($file))
+		{
+			throw new RuntimeException('Test junit report file is empty.');
+		}
+
+		// Scan ahead till we get to the <testsuite> element.
+		$reader->next('testsuite');
+
+		// If we don't have any tests in the report file panic.
+		if (!$reader->getAttribute('tests'))
+		{
+			throw new RuntimeException('Test report file contains no tests.');
+		}
 
 		// Set some report aggregate data.
 		$report->test_count 		+= $reader->getAttribute('tests');

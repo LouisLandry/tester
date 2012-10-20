@@ -20,7 +20,7 @@ class PTParserCheckstyle extends PTParser
 	 * Parse a Checkstyle XML report into a value object.
 	 *
 	 * @param   PTRequestTestCheckstyle  $report  The report on which to bind parsed data.
-	 * @param   string                  $file    The filesystem path of the checkstyle report to parse.
+	 * @param   string                   $file    The filesystem path of the checkstyle report to parse.
 	 *
 	 * @return  PTRequestTestCheckstyle
 	 *
@@ -31,7 +31,12 @@ class PTParserCheckstyle extends PTParser
 	public function parse($report, $file)
 	{
 		$reader = new XMLReader;
-		$reader->open($file);
+
+		if (@!$reader->open($file))
+		{
+			throw new RuntimeException('Test checkstyle report file is empty.');
+		}
+
 		while ($reader->read())
 		{
 			if ($reader->name == 'file')

@@ -28,11 +28,6 @@ class PTCommandTest extends PTCommand
 	{
 		$state = $this->fetchState();
 
-		// Set the filtering values.
-		$state->set('list.filter.pending_tests', 1);
-		$state->set('list.filter.mergeable', 1);
-		$state->set('list.filter.state', 0);
-
 		// Get the repository model.
 		$repository = new PTRepository($state);
 
@@ -40,13 +35,20 @@ class PTCommandTest extends PTCommand
 		$pullRequests = array_slice($this->app->input->args, 1);
 		if ($this->app->input->getBool('a', false) || empty($pullRequests))
 		{
-			$pullRequests = $repository->getRequests();
+			$pullRequests = $repository->requests
+								->filter('pending_tests', true)
+								->filter('mergeable', true)
+								->filter('state', false);
 		}
 		else
 		{
 			foreach ($pullRequests as $k => $v)
 			{
-				$pullRequests[$k] = $repository->getRequest((int) $v);
+				// Attempt to load the pull request based on GitHub ID.
+				$request = new PTRequest($this->db);
+				$request->load(array('github_id' => $v));
+
+				$pullRequests[$k] = $request;
 			}
 		}
 

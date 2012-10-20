@@ -32,16 +32,24 @@
 class PTRequest extends JTable
 {
 	/**
+	 * @var    JGithub  The GitHub API client.
+	 * @since  1.0
+	 */
+	protected $_github;
+
+	/**
 	 * Constructor
 	 *
-	 * @param   JDatabaseDriver  $db  Database driver object.
+	 * @param   JDatabaseDriver  $db      Database driver object.
+	 * @param   JGithub          $github  GitHub API client.
 	 *
 	 * @since   1.0
 	 */
-	public function __construct($db)
+	public function __construct(JDatabaseDriver $db, JGithub $github = null)
 	{
 		parent::__construct('#__pull_requests', 'pull_id', $db);
 
+		$this->_github = $github;
 		$this->data = new stdClass;
 	}
 
@@ -140,6 +148,43 @@ class PTRequest extends JTable
 
 		return $success;
 	}
+
+	/**
+	 * Method to reopen a pull request..
+	 *
+	 * @return  void
+	 *
+	 * @since   1.0
+	 */
+	public function reopen()
+	{
+		// Ensure we have a GitHub API client.
+		if (empty($this->_github))
+		{
+			throw new LogicException('GitHub API client dependency not met.');
+		}
+
+		if (empty($this->pull_id))
+		{
+			throw new LogicException('A request must be loaded before it can be reopened.');
+		}
+
+		// If the request is already merged we cannot reopen it, that's foolish.
+		if ($this->is_merged == 1)
+		{
+			throw new LogicException(sprintf('Cannot open merged pull request %d.', $this->github_id));
+		}
+
+		// Attempt to open the pull request via the GitHub API.
+		$this->github->pulls->edit(
+			$this->data->repo->owner->login,
+			$this->data->repo->name,
+			$this->github_id,
+			null, null,
+			'open'
+		);
+	}
+
 	/**
 	 * Overrides JTable::store to check unique fields.
 	 *

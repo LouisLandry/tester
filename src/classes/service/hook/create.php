@@ -39,6 +39,13 @@ class PTServiceHookCreate extends JControllerBase
 		// Create the model state object.
 		$state = $this->_buildModelState();
 
+		// Setup the GitHub API client.
+		$github = new JGithub;
+		$github->setOption('api.url', $state->get('github.api'));
+		$github->setOption('curl.certpath', JPATH_CONFIGURATION . '/cacert.pem');
+		$github->setOption('api.username', $state->get('github.username'));
+		$github->setOption('api.password', $state->get('github.password'));
+
 		// Get the repository model.
 		$repository = new PTRepository($state);
 

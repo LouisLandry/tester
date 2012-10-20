@@ -10,6 +10,9 @@
 /**
  * Joomla Pull Request Tester Repository class.
  *
+ * @property-read  PTMilestoneCollection  $milestones  The repository's milestone collection.
+ * @property-read  PTRequestCollection    $requests    The repository's pull request collection.
+ *
  * @package     Joomla.Tester
  * @subpackage  Repository
  * @since       1.0
@@ -41,14 +44,27 @@ class PTRepository extends JModelDatabase
 	private $_repository;
 
 	/**
+	 * @var    PTMilestoneCollection  The repository's milestone collection.
+	 * @since  1.0
+	 */
+	private $_milestones;
+
+	/**
+	 * @var    PTRequestCollection  The repository's pull request collection.
+	 * @since  1.0
+	 */
+	private $_requests;
+
+	/**
 	 * Instantiate the model.
 	 *
-	 * @param   JRegistry        $state  The model state.
-	 * @param   JDatabaseDriver  $db     The database adpater.
+	 * @param   JRegistry        $state   The model state.
+	 * @param   JDatabaseDriver  $db      The database adpater.
+	 * @param   JGithub          $github  GitHub API client.
 	 *
 	 * @since   12.1
 	 */
-	public function __construct(JRegistry $state = null, JDatabaseDriver $db = null)
+	public function __construct(JRegistry $state = null, JDatabaseDriver $db = null, JGithub $github = null)
 	{
 		// Execute the parent constructor.
 		parent::__construct($state, $db);
@@ -62,6 +78,34 @@ class PTRepository extends JModelDatabase
 
 		// Instantiate the repository object.
 		$this->repo = new PTGitRepository($this->state->get('repo'));
+
+		// Setup the collection objects.
+		$this->_requests = new PTRequestCollection($db);
+	}
+
+	/**
+	 * Get non-public properties when available.
+	 *
+	 * @param   string  $name  The name of the property to return.
+	 *
+	 * @return  mixed
+	 *
+	 * @since   1.0
+	 */
+	public function __get($name)
+	{
+		switch ($name)
+		{
+			case 'requests':
+				return $this->_requests;
+				break;
+			case 'milestones':
+				return $this->_milestones;
+				break;
+			default:
+				trigger_error('Cannot access property ' . __CLASS__ . '::' . $name, E_USER_WARNING);
+				break;
+		}
 	}
 
 	public function cleanReleases()
@@ -84,109 +128,6 @@ class PTRepository extends JModelDatabase
 		}
 
 		return $changedRequests;
-	}
-
-	/**
-	 * Get a pull request by either GitHub id or local id.
-	 *
-	 * @param   integer  $githubId  The GitHub pull request id number.
-	 * @param   integer  $pullId    The internal primary key for the pull request.
-	 *
-	 * @return  object
-	 *
-	 * @since   1.0
-	 */
-	public function getRequest($githubId, $pullId = null)
-	{
-		// Build the query to get the pull requests.
-		$query = $this->db->getQuery(true);
-		$query->select('r.pull_id, r.github_id, r.data');
-		$query->from('#__pull_requests AS r');
-		$query->leftJoin('#__pull_request_tests AS t ON r.pull_id = t.pull_id');
-
-		if ($pullId)
-		{
-			$query->where('r.pull_id = ' . (int) $pullId);
-		}
-		else
-		{
-			$query->where('r.github_id = ' . (int) $githubId);
-		}
-
-		try
-		{
-			$this->db->setQuery($query, 0, 1);
-			$pullRequest = $this->db->loadObject();
-
-			// Decode the expanded pull request data.
-			$pullRequest->data = json_decode($pullRequest->data);
-		}
-		catch (RuntimeException $e)
-		{
-			JLog::add('Error: ' . $e->getMessage(), JLog::DEBUG);
-		}
-
-		return $pullRequest;
-	}
-
-	/**
-	 * Get a list of Pull Requests based on the model state.
-	 *
-	 * @return  array
-	 *
-	 * @since   1.0
-	 */
-	public function getRequests()
-	{
-		// Initialize variables.
-		$pullRequests = array();
-
-		// Build the query to get the pull requests.
-		$query = $this->db->getQuery(true);
-		$query->select('r.*');
-		$query->from('#__pull_requests AS r');
-		$query->leftJoin('#__pull_request_tests AS t ON r.pull_id = t.pull_id');
-		$query->leftJoin('#__pull_request_tests AS t2 ON (r.pull_id = t2.pull_id AND t.tested_time < t2.tested_time)');
-		$query->where('t2.pull_id IS NULL');
-
-		// Add the test data if required.
-		if ($this->state->get('list.tests', 0))
-		{
-			$query->leftJoin('#__pull_request_test_checkstyle_reports AS ch ON t.test_id = ch.test_id');
-			$query->leftJoin('#__pull_request_test_unit_test_reports AS ut ON t.test_id = ut.test_id');
-
-			$query->select('t.tested_time, t.data AS tested_data');
-			$query->select('ch.error_count AS style_errors, ch.warning_count AS style_warnings, ch.data AS style_data');
-			$query->select('ut.failure_count AS test_failures, ut.error_count AS test_errors, ut.data AS test_data');
-		}
-
-		// Set the filtering for the query.
-		$query = $this->_setFiltering($query);
-
-		// Set the sorting clause.
-		$query = $this->_setSorting($query);
-
-		try
-		{
-			$this->db->setQuery($query, $this->state->get('list.start', 0), $this->state->get('list.limit', 50));
-			$pullRequests = $this->db->loadObjectList();
-
-			// Callback function to decode the expanded pull request data.
-			$decodeCallback = function($request)
-			{
-				$request->data = json_decode($request->data);
-				return $request;
-			};
-
-			// Decode the serialized pull request data for the entire array.
-			$pullRequests = array_map($decodeCallback, $pullRequests);
-		}
-		catch (RuntimeException $e)
-		{
-			JLog::add('Error: ' . $e->getMessage(), JLog::DEBUG);
-		}
-
-		return $pullRequests;
 	}
 
 	/**
@@ -246,122 +187,6 @@ class PTRepository extends JModelDatabase
 
 		// Clean things up.
 		$this->repo->clean();
-	}
-
-	/**
-	 * Test an array of pull requests.
-	 *
-	 * @param   object  $request  The requests to test.
-	 *
-	 * @return  void
-	 *
-	 * @since   1.0
-	 */
-	public function saveRequestTest($jenkinsBuildNumber)
-	{
-		// Get the base url for all build related resources.
-		$buildBaseUrl = $this->state->get('jenkins.url') . '/job/' . $this->state->get('jenkins.job') . '/' . $jenkinsBuildNumber;
-
-		// Get the build information from the Jenkins JSON api.
-		$buildData = json_decode(file_get_contents($buildBaseUrl . '/api/json'));
-
-		// Get some critical values from the test reports.
-		$githubId   = (int) trim(file_get_contents($buildBaseUrl . '/artifact/build/logs/pull-id.txt'));
-		$baseCommit = trim(file_get_contents($buildBaseUrl . '/artifact/build/logs/base-sha1.txt'));
-		$headCommit = trim(file_get_contents($buildBaseUrl . '/artifact/build/logs/head-sha1.txt'));
-		$workspacePath = trim(file_get_contents($buildBaseUrl . '/artifact/build/logs/base-path.txt'));
-
-		// Attempt to load the existing pull request based on GitHub ID.
-		$request = new PTRequest($this->db);
-		$request->load(array('github_id' => $githubId));
-
-		// Create the test report object.
-		$test = new PTRequestTest($this->db);
-		$test->pull_id = $request->pull_id;
-		$test->tested_time = JFactory::getDate((int) $buildData->timestamp / 1000)->toSql();
-		$test->head_revision = $headCommit;
-		$test->base_revision = $baseCommit;
-
-		if (!$test->check())
-		{
-			throw new RuntimeException(
-				sprintf('Test for pull request %d did not check out for storage.', $request->github_id)
-			);
-		}
-
-		try
-		{
-			$test->store();
-		}
-		catch (RuntimeException $e)
-		{
-			throw new RuntimeException(
-				sprintf('Test for pull request %d was unable to be stored.  Error message `%s`.', $request->github_id, $e->getMessage())
-			);
-		}
-
-		// Create the checkstyle report object.
-		$checkstyle = new PTRequestTestCheckstyle($this->db);
-		$checkstyle->pull_id = $test->pull_id;
-		$checkstyle->test_id = $test->test_id;
-
-		try
-		{
-			// Parse the checktyle report.
-			$parser = new PTParserCheckstyle(array($workspacePath));
-			$checkstyle = $parser->parse($checkstyle, $buildBaseUrl . '/artifact/build/logs/checkstyle.xml');
-			$checkstyle = $this->runCheckstyleDiff($checkstyle);
-			$checkstyle->store();
-		}
-		catch (RuntimeException $e)
-		{
-			$test->data->checkstyle = false;
-			JLog::add(
-				sprintf('Checkstyle report for pull request %d was unable to be stored.  Error message `%s`.', $request->github_id, $e->getMessage()),
-				JLog::DEBUG,
-				'error'
-			);
-		}
-
-		$unit = new PTRequestTestUnittest($this->db);
-		$unit->pull_id = $test->pull_id;
-		$unit->test_id = $test->test_id;
-
-		try
-		{
-			$parser = new PTParserJunit(array($workspacePath));
-			$unit = $parser->parse($unit, $buildBaseUrl . '/artifact/build/logs/junit.xml');
-			$unit->store();
-		}
-		catch (RuntimeException $e)
-		{
-			$test->data->unit = false;
-			JLog::add(
-				sprintf('Unit test report for pull request %d was unable to be stored.  Error message `%s`.', $request->github_id, $e->getMessage()),
-				JLog::DEBUG,
-				'error'
-			);
-		}
-
-		try
-		{
-			$parser = new PTParserJunit(array($workspacePath));
-			$unit = $parser->parse($unit, $buildBaseUrl . '/artifact/build/logs/junit.legacy.xml');
-			$unit->store();
-		}
-		catch (RuntimeException $e)
-		{
-			$test->data->unit_legacy = false;
-			JLog::add(
-				sprintf('Legacy unit test report for pull request %d was unable to be stored.  Error message `%s`.', $request->github_id, $e->getMessage()),
-				JLog::DEBUG,
-				'error'
-			);
-		}
-
-		$test->store();
-
-		return $this;
 	}
 
 	/**
@@ -558,7 +383,9 @@ class PTRepository extends JModelDatabase
 	 */
 	public function testRequest($githubId, $pullId = null)
 	{
-		$request = $this->getRequest($githubId, $pullId);
+		// Attempt to load the pull request based on GitHub ID.
+		$request = new PTRequest($this->db);
+		$request->load(array('github_id' => $githubId));
 
 		// Enqueue the test with the build server.
 		$this->enqueueRequestTest(
