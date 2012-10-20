@@ -35,7 +35,9 @@ CREATE TABLE "pt_pull_requests" (
 CREATE TABLE "pt_pull_request_tests" (
   test_id INTEGER PRIMARY KEY AUTOINCREMENT,
   pull_id INTEGER REFERENCES pt_pull_requests(pull_id) ON UPDATE CASCADE ON DELETE CASCADE,
+  state INTEGER NOT NULL,
   revision INTEGER NOT NULL,
+  build_number INTEGER NOT NULL,
   tested_time TEXT NOT NULL,
   head_revision TEXT NOT NULL,
   base_revision TEXT NOT NULL,

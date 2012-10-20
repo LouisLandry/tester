@@ -31,14 +31,19 @@ class PTParserJunit extends PTParser
 	public function parse($report, $file)
 	{
 		$reader = new XMLReader;
-
 		if (@!$reader->open($file))
 		{
-			throw new RuntimeException('Test junit report file is empty.');
+			throw new RuntimeException('Test junit report does not exist.');
 		}
 
 		// Scan ahead till we get to the <testsuite> element.
-		$reader->next('testsuite');
+		while (@$reader->read())
+		{
+			if ($reader->name === 'testsuite' && $reader->nodeType == XMLReader::ELEMENT)
+			{
+				break;
+			}
+		}
 
 		// If we don't have any tests in the report file panic.
 		if (!$reader->getAttribute('tests'))

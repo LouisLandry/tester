@@ -29,6 +29,9 @@ class PTCommandReparse extends PTCommand
 		// Create the model state object.
 		$state = $this->fetchState();
 
+// 		$test = new PTRequestTest(JFactory::$database);
+// 		$test->processJenkinsBuild(53);
+
 		for ($i = 28; $i <= 64; $i++)
 		{
 			$test = new PTRequestTest(JFactory::$database);

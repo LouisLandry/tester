@@ -38,7 +38,9 @@ CREATE TABLE `pt_pull_requests` (
 CREATE TABLE `pt_pull_request_tests` (
   `test_id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `pull_id` int(10) unsigned NOT NULL DEFAULT '0',
+  `state` tinyint(4) NOT NULL DEFAULT '0',
   `revision` int(10) unsigned NOT NULL DEFAULT '0',
+  `build_number` int(10) unsigned NOT NULL,
   `tested_time` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
   `head_revision` varchar(255) NOT NULL DEFAULT '',
   `base_revision` varchar(255) NOT NULL DEFAULT '',

@@ -80,7 +80,7 @@ class PTRepository extends JModelDatabase
 		$this->repo = new PTGitRepository($this->state->get('repo'));
 
 		// Setup the collection objects.
-		$this->_requests = new PTRequestCollection($db);
+		$this->_requests = new PTRequestCollection($this->db);
 	}
 
 	/**

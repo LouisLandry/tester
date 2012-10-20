@@ -12,7 +12,9 @@
  *
  * @property-read  integer  $test_id
  * @property-read  integer  $pull_id
+ * @property-read  integer  $state
  * @property-read  integer  $revision
+ * @property-read  integer  $build_number
  * @property-read  JDate    $tested_time
  * @property-read  string   $head_revision
  * @property-read  string   $base_revision
@@ -24,6 +26,11 @@
  */
 class PTRequestTest extends JTable
 {
+	const PENDING = 0;
+	const SUCCESS = 1;
+	const FAILURE = 2;
+	const ERROR   = 3;
+
 	/**
 	 * @var    object  The repository database row object.
 	 * @since  1.0
@@ -180,36 +187,71 @@ class PTRequestTest extends JTable
 	 *
 	 * @param   integer  $jenkinsBuildNumber  The Jenkins build number to parse and store.
 	 *
-	 * @return  void
+	 * @return  PTRequestTest
 	 *
 	 * @since   1.0
 	 */
 	public function processJenkinsBuild($jenkinsBuildNumber)
 	{
 		$app = JFactory::getApplication();
+		$http = new JHttp;
 
 		// Get the base url for all build related resources.
 		$buildBaseUrl = $app->get('jenkins.url') . '/job/' . $app->get('jenkins.job') . '/' . $jenkinsBuildNumber;
 
-		// Get the build information from the Jenkins JSON api.
-		$buildData = json_decode(file_get_contents($buildBaseUrl . '/api/json'));
+		// Get the base path of the build.
+		$response = $http->get($buildBaseUrl . '/artifact/build/logs/base-path.txt');
+		if ($response->code != 200)
+		{
+			throw new RuntimeException(sprintf('Cannot find the base path for build %d.', $jenkinsBuildNumber));
+		}
+		$workspacePath = trim($response->body);
 
-		// Get some critical values from the test reports.
-		$githubId   = (int) trim(file_get_contents($buildBaseUrl . '/artifact/build/logs/pull-id.txt'));
-		$baseCommit = trim(file_get_contents($buildBaseUrl . '/artifact/build/logs/base-sha1.txt'));
-		$headCommit = trim(file_get_contents($buildBaseUrl . '/artifact/build/logs/head-sha1.txt'));
-		$workspacePath = trim(file_get_contents($buildBaseUrl . '/artifact/build/logs/base-path.txt'));
+		// Get the build information from the Jenkins JSON api.
+		$response = $http->get($buildBaseUrl . '/api/json');
+		if ($response->code != 200)
+		{
+			throw new RuntimeException(sprintf('The build %d does not exist at `%s`.', $jenkinsBuildNumber, $buildBaseUrl));
+		}
+		$buildData = json_decode($response->body);
+
+		// Update some test values.
+		$this->tested_time = JFactory::getDate((int) $buildData->timestamp / 1000)->toSql();
+		$this->build_number = (int) $jenkinsBuildNumber;
+		$this->data->merge = true;
+
+		// Get the Pull Request ID from the build artifacts.
+		$response = $http->get($buildBaseUrl . '/artifact/build/logs/pull-id.txt');
+		if ($response->code != 200)
+		{
+			throw new RuntimeException(sprintf('The build %d does not contain a valid pull request ID.', $jenkinsBuildNumber));
+		}
+		$githubId = (int) trim($response->body);
 
 		// Attempt to load the existing pull request based on GitHub ID.
 		$request = new PTRequest($this->_db);
 		$request->load(array('github_id' => $githubId));
-
-		// Create the test report object.
 		$this->pull_id = $request->pull_id;
-		$this->tested_time = JFactory::getDate((int) $buildData->timestamp / 1000)->toSql();
-		$this->head_revision = $headCommit;
-		$this->base_revision = $baseCommit;
-		$this->build_number = (int) $jenkinsBuildNumber;
+
+		// Get the base SHA1 from the build artifacts.
+		$response = $http->get($buildBaseUrl . '/artifact/build/logs/base-sha1.txt');
+		if ($response->code != 200)
+		{
+			throw new RuntimeException(sprintf('The build %d did not successfully get a base repository for testing.', $jenkinsBuildNumber));
+		}
+		$this->base_revision = trim($response->body);
+
+		// Get the head SHA1 from the build artifacts.
+		$response = $http->get($buildBaseUrl . '/artifact/build/logs/head-sha1.txt');
+		if ($response->code != 200)
+		{
+			$this->state = self::ERROR;
+			$this->data->merge = false;
+		}
+		else
+		{
+			$this->head_revision = trim($response->body);
+		}
 
 		if (!$this->check())
 		{
@@ -229,6 +271,12 @@ class PTRequestTest extends JTable
 			);
 		}
 
+		// If we didn't get a clean merge, there is no sense in going any further.
+		if (!$this->data->merge)
+		{
+			return $this;
+		}
+
 		// Create the checkstyle report object.
 		$checkstyle = new PTRequestTestCheckstyle($this->_db);
 		$checkstyle->pull_id = $this->pull_id;
@@ -241,6 +289,7 @@ class PTRequestTest extends JTable
 			$checkstyle = $parser->parse($checkstyle, $buildBaseUrl . '/artifact/build/logs/checkstyle.xml');
 			$checkstyle = $this->runCheckstyleDiff($checkstyle);
 			$checkstyle->store();
+			$this->data->checkstyle = true;
 		}
 		catch (RuntimeException $e)
 		{
@@ -256,6 +305,16 @@ class PTRequestTest extends JTable
 			);
 		}
 
+		// Set the state based on the checkstyle report.
+		if (!$this->data->checkstyle)
+		{
+			$this->state = self::ERROR;
+		}
+		elseif ($checkstyle->error_count || $checkstyle->warning_count)
+		{
+			$this->state = self::FAILURE;
+		}
+
 		$unit = new PTRequestTestUnittest($this->_db);
 		$unit->pull_id = $this->pull_id;
 		$unit->test_id = $this->test_id;
@@ -265,6 +324,7 @@ class PTRequestTest extends JTable
 			$parser = new PTParserJunit(array($workspacePath));
 			$unit = $parser->parse($unit, $buildBaseUrl . '/artifact/build/logs/junit.xml');
 			$unit->store();
+			$this->data->unit = true;
 		}
 		catch (RuntimeException $e)
 		{
@@ -280,11 +340,22 @@ class PTRequestTest extends JTable
 			);
 		}
 
+		// Set the state based on the checkstyle report.
+		if (!$this->data->unit)
+		{
+			$this->state = self::ERROR;
+		}
+		elseif ($unit->failure_count || $unit->error_count)
+		{
+			$this->state = self::FAILURE;
+		}
+
 		try
 		{
 			$parser = new PTParserJunit(array($workspacePath));
 			$unit = $parser->parse($unit, $buildBaseUrl . '/artifact/build/logs/junit.legacy.xml');
 			$unit->store();
+			$this->data->unit_legacy = true;
 		}
 		catch (RuntimeException $e)
 		{
@@ -298,6 +369,21 @@ class PTRequestTest extends JTable
 				JLog::DEBUG,
 				'error'
 			);
+		}
+
+		// Set the state based on the checkstyle report.
+		if (!$this->data->unit_legacy)
+		{
+			$this->state = self::ERROR;
+		}
+		elseif ($unit->failure_count || $unit->error_count)
+		{
+			$this->state = self::FAILURE;
+		}
+
+		if ($this->state != self::ERROR && $this->state != self::FAILURE)
+		{
+			$this->state = self::SUCCESS;
 		}
 
 		$this->store();
